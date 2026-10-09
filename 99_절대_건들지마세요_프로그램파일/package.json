@@ -1,0 +1,19 @@
+{
+  "name": "weolbu-middle-class-codex-project",
+  "private": true,
+  "type": "module",
+  "config": {
+    "templateRepo": "https://github.com/makeit-edu/makeit-middle-kit.git"
+  },
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "init-env": "node scripts/create-env-local.mjs",
+    "check-wordpress": "node scripts/wordpress-connection-check.mjs",
+    "adsense:check-sites": "node scripts/wordpress-connection-check.mjs",
+    "adsense:create-drafts": "node scripts/adsense-create-drafts.mjs",
+    "adsense:auto-drafts": "node scripts/adsense-auto-drafts.mjs",
+    "keys": "node scripts/keys.mjs",
+    "save": "node scripts/save.mjs",
+    "update:kit": "node scripts/update-kit.mjs"
+  }
+}

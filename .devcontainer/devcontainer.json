@@ -1,0 +1,84 @@
+// 월부 중급반 키트 — GitHub Codespaces 개발 컨테이너 설정 (PRD 5-2, D3~D7, D10, D13)
+{
+  "name": "월부 중급반 키트",
+
+  // Node 22 + Debian bookworm. Node 20은 2026-04 EOL 로 태그 동결,
+  // universal 이미지는 수 GB 로 과중해서 쓰지 않는다.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+
+  // D6: CODEX_HOME을 워크스페이스 내부로 고정 — rebuild 시 홈 디렉토리는 소멸하지만
+  //     /workspaces 는 생존하므로 auth.json·config.toml이 살아남아 재로그인 빈도 감소.
+  //     .codex/ 는 반드시 .gitignore 대상 (auth.json = 토큰, 커밋 절대 금지).
+  "containerEnv": {
+    "CODEX_HOME": "/workspaces/${localWorkspaceFolderBasename}/.codex"
+  },
+
+  // 코치진 원격 지원용(gh codespace ssh) — 수강생 사용 흐름에는 영향 없음
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
+
+  "customizations": {
+    // 생성 직후 README.md 가 미리보기로 열려 안내서와 혼동을 준다.
+    // openFiles 는 "파일 하나 이상"을 요구해서 빈 배열([])로는 끌 수 없다 —
+    // 빈 배열은 무시되고 README 를 여는 기본 동작으로 되돌아간다(실측).
+    // 여기 적은 파일은 '열리긴 하되 곧바로 터미널 탭에 덮이는' 자리다.
+    // (아래 terminal.integrated.defaultLocation 참고 — 터미널이 나중에 열려 앞에 온다)
+    "codespaces": {
+      "openFiles": ["시작하기.md"]
+    },
+    "vscode": {
+      // D4: Codex는 CLI TUI가 기본 흐름, openai.chatgpt 확장은 보조.
+      //     확장 단독 OAuth는 Codespaces에서 실패(#6403)하므로 로그인은 CLI로만 안내.
+      "extensions": ["openai.chatgpt"],
+      "settings": {
+        // 초보 수강생의 Ctrl+S/Cmd+S 저장 실수 제거 목적
+        "files.autoSave": "afterDelay",
+        // 시작 화면(Welcome 탭)도 띄우지 않는다 — 위 openFiles 와 같은 이유.
+        "workbench.startupEditor": "none",
+        // ★ 터미널을 '패널' 이 아니라 '편집기 탭' 으로 띄운다.
+        //   이게 이 파일에서 제일 중요한 한 줄이다.
+        //
+        //   패널 방식(workbench.panel.opensMaximized)은 실패했다(실측):
+        //   Codespaces 가 터미널 패널을 '이미 열린 상태'로 복원해 버려서
+        //   "열 때 최대화하라"는 지시가 발동할 기회 자체가 없었고, 결국
+        //   시작하기.md 가 화면 위쪽을 다 차지하고 터미널은 아래 한 줌만 남았다.
+        //
+        //   편집기 탭으로 띄우면 openFiles 로 열린 문서보다 '나중에' 열리므로
+        //   터미널이 활성 탭이 되어 화면 전체를 차지한다. 수강생이 처음 보는 화면이
+        //   곧 검은 창이 된다.
+        "terminal.integrated.defaultLocation": "editor",
+        // 터미널 탭이 실수로 닫혀도 빈 화면만 남지 않게 한다
+        "terminal.integrated.tabs.enabled": true,
+        // 패널로 열리는 경우(수강생이 + 버튼으로 새로 여는 등)를 위한 보조 장치
+        "workbench.panel.opensMaximized": "always",
+        // 폴더 신뢰 확인창 — 이 세 줄은 application 스코프라 원격 설정으로는
+        // 적용되지 않는다(실측: 넣은 뒤에도 확인창이 그대로 떴다).
+        // 남겨 두되 기대하지 않고, 실제 대응은 안내서 4번에서 한다.
+        "security.workspace.trust.enabled": false,
+        "security.workspace.trust.startupPrompt": "never",
+        "security.workspace.trust.banner": "never"
+      }
+    }
+  },
+
+  // D11: 무거운 설치(apt·npm ci·Headless Shell)는 onCreate 에 배치해 prebuild 에 구워지게 한다.
+  //      postCreate 는 prebuild 에 구워지지 않으므로 시크릿/사용자별 단계만 둔다 (PRD 5-2).
+  "onCreateCommand": "bash .devcontainer/setup.sh --prebuild",
+
+  // prebuild 이후 템플릿이 갱신됐을 때 의존성만 다시 맞춘다
+  "updateContentCommand": "bash .devcontainer/setup.sh --update",
+
+  // 생성 직후 1회(사용자별): Codex 설치 + config.toml + PATH + .env.local 템플릿 + upstream
+  "postCreateCommand": "bash .devcontainer/setup.sh --user",
+
+  // 접속할 때마다: 환영 안내 + 미커밋 작업물 경고 (PRD 4-4, 8-R3)
+  "postAttachCommand": "bash .devcontainer/welcome.sh",
+
+  // 2코어 8GB 기본. 4코어는 무료 core-hour 도 2배 속도로 소진되므로,
+  // 속도가 답답하다는 수강생만 개별로 올리도록 안내한다.
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb"
+  }
+}

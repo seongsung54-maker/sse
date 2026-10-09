@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+# ============================================================================
+# 월부 중급반 키트 — Codespace 설치 스크립트 (PRD 5-2·D11)
+#
+# 모드 (devcontainer.json 이 단계별로 호출):
+#   --prebuild : onCreateCommand      — npm ci·Codex 설치 (prebuild 에 구워짐)
+#   --update   : updateContentCommand — npm ci 재확인 (prebuild 갱신 시)
+#   --user     : postCreateCommand    — config.toml·PATH·.env.local 템플릿·upstream (사용자별 단계)
+#   (인자 없음): 전체 실행 (하위 호환 — 수동 복구용)
+#
+# 원칙: 한 단계가 실패해도 멈추지 않고 끝까지 진행한 뒤,
+#       실패한 단계 요약을 마지막에 출력한다. (PRD 4-1 3단계 — 환경 관문은
+#       postCreate 실패의 연쇄 오류를 막기 위해 '진단' 명령으로 별도 확인)
+# ============================================================================
+
+set -u   # 미정의 변수만 오류 처리. set -e 는 쓰지 않는다(실패해도 다음 단계 진행).
+
+MODE="${1:-all}"
+
+# 저장소 루트: 이 스크립트(.devcontainer/setup.sh) 기준 상위 폴더
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROGRAM_DIR="$ROOT/99_절대_건들지마세요_프로그램파일"
+CODEX_RUNTIME_DIR="$PROGRAM_DIR/runtime/codex"
+
+FAILED=()   # 실패한 단계 이름 누적
+
+# 단계 실행 헬퍼: 실패해도 기록만 하고 계속 진행
+run_step() {
+  local name="$1"; shift
+  echo ""
+  echo "──────────────────────────────────────────────"
+  echo "▶ $name"
+  echo "──────────────────────────────────────────────"
+  if "$@"; then
+    echo "✔ $name — 완료"
+  else
+    echo "✖ $name — 실패 (다음 단계로 계속 진행합니다)"
+    FAILED+=("$name")
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# (b) 프로그램 폴더 의존성 설치 (package-lock.json 기준 재현 가능한 설치)
+# ----------------------------------------------------------------------------
+step_npm_program() {
+  npm ci --prefix "$PROGRAM_DIR" --no-audit --no-fund
+}
+
+# ----------------------------------------------------------------------------
+# (d) Codex CLI 설치 — runtime/codex 에 npm --prefix 로 격리 설치 (현행 방식 유지)
+#     runtime/ 은 .gitignore 대상이라 저장소에 포함되지 않는다.
+# ----------------------------------------------------------------------------
+step_codex_install() {
+  mkdir -p "$CODEX_RUNTIME_DIR"
+  npm install --prefix "$CODEX_RUNTIME_DIR" --no-audit --no-fund @openai/codex@latest
+}
+
+# ----------------------------------------------------------------------------
+# (f) CODEX_HOME 준비 + config.toml 작성 (D6·D7)
+#     - 모델 설정은 config.toml 하나로 일원화 (기존 런처의 -c 플래그 폐기)
+#     - 모델과 추론 강도는 재빌드할 때마다 정해진 값으로 되돌린다 (수강생 전원 동일 환경)
+# ----------------------------------------------------------------------------
+# config.toml 의 최상위 설정 한 줄을 원하는 값으로 맞춘다.
+#
+# 기존 줄을 고치는 게 아니라 '지우고 맨 앞에 다시 넣는' 방식이다. 이유가 두 가지 있다.
+#   · TOML 최상위 키는 파일 맨 앞에 있어야 한다. 그냥 뒤에 붙이면
+#     [projects."..."] 같은 테이블 안으로 들어가 설정이 조용히 무시된다.
+#   · 같은 키가 두 줄이 되면 Codex 가 설정 파일을 못 읽고 통째로 죽는다. 지우고 넣으면
+#     중복도 같이 정리된다.
+codex_cfg_set() {
+  local cfg="$1" key="$2" value="$3"
+  # 이미 그 값이면 파일을 건드리지 않는다 (재빌드마다 의미 없는 변경이 쌓이지 않도록)
+  if [ "$(grep -cE "^[[:space:]]*$key[[:space:]]*=" "$cfg" 2>/dev/null)" = "1" ] &&
+     grep -qE "^[[:space:]]*$key[[:space:]]*=[[:space:]]*\"$value\"[[:space:]]*$" "$cfg"; then
+    return 0
+  fi
+  sed -E "/^[[:space:]]*$key[[:space:]]*=/d" "$cfg" > "$cfg.tmp"
+  { printf '%s = "%s"\n' "$key" "$value"; cat "$cfg.tmp"; } > "$cfg"
+  rm -f "$cfg.tmp"
+  echo "코덱스 설정을 맞췄습니다: $key = \"$value\""
+}
+
+step_codex_config() {
+  local codex_home="${CODEX_HOME:-$ROOT/.codex}"
+  mkdir -p "$codex_home"
+  local cfg="$codex_home/config.toml"
+  touch "$cfg"
+
+  # 모델과 추론 강도를 고정한다.
+  #
+  #     model = "gpt-5.6-luna"          빠르고 가벼운 코딩용 모델
+  #     model_reasoning_effort = "low"  Codex 설명: "가볍게 생각하고 빠르게 답하기"
+  #
+  # 300명이 제각각 다른 모델로 돌면 같은 질문에 답이 다르고, 속도도 한도 소모도 달라진다.
+  # 코치가 화면만 보고는 원인을 못 짚는다. 그래서 재빌드할 때마다 이 값으로 되돌린다.
+  #
+  # 예전에는 모델을 일부러 비워 뒀다. ChatGPT 구독 계정에서 못 쓰는 모델을 박으면
+  # 첫 실행이 그대로 죽기 때문이다 (실측):
+  #   400 invalid_request_error — "The 'gpt-5.4-mini' model is not supported
+  #   when using Codex with a ChatGPT account."
+  # gpt-5.6-luna 는 ChatGPT 계정으로 직접 돌려 통과를 확인했다 (2026-09-15 / codex-cli 0.144.1).
+  # 단 이 모델은 codex-cli 0.144.0 이상에서만 보인다 — 설치를 @latest 로 유지해야 하는 이유다.
+  #
+  # 언젠가 이 모델이 목록에서 내려가면 첫 실행이 다시 400 으로 죽는다.
+  # 그때는 아래 두 줄만 새 모델로 바꿔 업데이트를 내보내면 된다.
+  # '진단' 이 지금 쓰는 모델을 출력하니, 어느 수강생이 무엇으로 돌고 있는지 바로 드러난다.
+  codex_cfg_set "$cfg" model "gpt-5.6-luna"
+  codex_cfg_set "$cfg" model_reasoning_effort "low"
+
+  # 권한 사전 설정 — 기존 강의의 '전체 권한 주기' 수동 단계를 대체한다.
+  # Codex 의 workspace-write 샌드박스는 bubblewrap(bwrap) 으로 user namespace 를 만드는데,
+  # Codespaces 컨테이너는 비특권 user namespace 생성을 막아 bwrap 이 항상 실패한다.
+  # (openai/codex#16018, #16211 — 컨테이너 안에서는 danger-full-access 가 공식 권장 경로)
+  # Codespace 컨테이너 자체가 격리 경계이므로 내부 샌드박스는 끈다.
+  if grep -qE '^[[:space:]]*sandbox_mode[[:space:]]*=[[:space:]]*"workspace-write"' "$cfg" 2>/dev/null; then
+    # 구버전 설정 마이그레이션: bwrap 오류를 유발하던 workspace-write 를 교체한다
+    sed -i.bak -E 's/^[[:space:]]*sandbox_mode[[:space:]]*=.*/sandbox_mode = "danger-full-access"/' "$cfg"
+    sed -i.bak -E '/^\[sandbox_workspace_write\]/d; /^network_access[[:space:]]*=/d' "$cfg"
+    rm -f "$cfg.bak"
+    echo "Codex 샌드박스 설정을 Codespaces 환경에 맞게 교체했습니다."
+  fi
+
+  if ! grep -qE '^[[:space:]]*approval_policy[[:space:]]*=' "$cfg" 2>/dev/null; then
+    cat >> "$cfg" <<'EOF'
+
+# 승인 질문 없이 진행 (기존 강의의 '전체 권한' 설정과 동일한 경험)
+# 컨테이너가 이미 격리 경계라서 내부 샌드박스(bwrap)는 끈다 — Codespaces 에서는 동작 불가.
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+EOF
+    echo "Codex 권한을 사전 설정했습니다 (승인 질문 없이 작업 진행)."
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# (g) 한글 명령(bin/)을 PATH 에 등록 — 터미널에서 '시작', '진단' 등을 바로 입력 가능
+#     중복 등록 방지를 위해 마커 주석으로 확인 후 1회만 추가
+# ----------------------------------------------------------------------------
+step_path() {
+  local marker="# 월부 중급반 키트 한글 명령 (makeit-middle-kit bin)"
+  local rc="$HOME/.bashrc"
+  touch "$rc"
+  if grep -qF "$marker" "$rc"; then
+    echo "PATH 등록이 이미 되어 있습니다."
+  else
+    {
+      echo ""
+      echo "$marker"
+      echo "export PATH=\"$ROOT/bin:\$PATH\""
+    } >> "$rc"
+    echo "PATH 에 bin/ 을 등록했습니다: $rc"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# (h) .env.local 템플릿 복사 (PRD 5-1 post-create — 키설정 전 '진단' 이 실패하지 않도록)
+#     기존 파일이 있으면 절대 덮어쓰지 않는다.
+# ----------------------------------------------------------------------------
+step_env_template() {
+  if [ -f "$PROGRAM_DIR/.env.local" ]; then
+    echo ".env.local 이 이미 있어 그대로 둡니다."
+  elif [ -f "$PROGRAM_DIR/.env.example" ]; then
+    cp "$PROGRAM_DIR/.env.example" "$PROGRAM_DIR/.env.local"
+    echo ".env.local 입력 양식을 만들었습니다. (값은 '키설정' 으로 입력)"
+  else
+    echo ".env.example 이 없어 건너뜁니다. ('키설정' 실행 시 자동 생성됩니다)"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# (i) upstream(템플릿 저장소) 원격 등록 (PRD 5-9 1번 — '업데이트' 명령이 사용)
+#     package.json 의 config.templateRepo 가 실제 값일 때만 등록한다.
+# ----------------------------------------------------------------------------
+step_upstream() {
+  local repo
+  repo="$(node -e "try{console.log(require('$PROGRAM_DIR/package.json').config.templateRepo||'')}catch(e){console.log('')}" 2>/dev/null || echo "")"
+  if [ -z "$repo" ] || [[ "$repo" == *"REPLACE_WITH"* ]]; then
+    echo "템플릿 저장소 주소가 아직 설정 전이라 건너뜁니다. ('업데이트' 실행 시 다시 시도합니다)"
+    return 0
+  fi
+  if git -C "$ROOT" remote get-url upstream >/dev/null 2>&1; then
+    echo "upstream 이 이미 등록되어 있습니다."
+  else
+    git -C "$ROOT" remote add upstream "$repo" && echo "upstream 을 등록했습니다: $repo"
+  fi
+}
+
+# ============================================================================
+# 실행 순서 (실패해도 전부 시도)
+# ============================================================================
+case "$MODE" in
+  --prebuild)
+    echo "월부 중급반 키트 — 기본 설치(prebuild 대상)를 시작합니다."
+    run_step "1/2 프로그램 의존성 설치"                        step_npm_program
+    run_step "2/2 코덱스(AI 비서) 설치"                        step_codex_install
+    ;;
+  --update)
+    echo "월부 중급반 키트 — 의존성 갱신을 확인합니다."
+    run_step "1/1 프로그램 의존성 확인"                        step_npm_program
+    ;;
+  --user)
+    echo "월부 중급반 키트 — 사용자별 설정을 준비합니다."
+    run_step "1/4 코덱스 기본 설정"                            step_codex_config
+    run_step "2/4 한글 명령 등록"                              step_path
+    run_step "3/4 키 입력 양식(.env.local) 준비"               step_env_template
+    run_step "4/4 업데이트 채널(upstream) 연결"                step_upstream
+    ;;
+  *)
+    echo "월부 중급반 키트 설치를 시작합니다. 1~2분이면 끝나요 ☕"
+    run_step "1/6 프로그램 의존성 설치"                        step_npm_program
+    run_step "2/6 코덱스(AI 비서) 설치"                        step_codex_install
+    run_step "3/6 코덱스 기본 설정"                            step_codex_config
+    run_step "4/6 한글 명령 등록"                              step_path
+    run_step "5/6 키 입력 양식(.env.local) 준비"               step_env_template
+    run_step "6/6 업데이트 채널(upstream) 연결"                step_upstream
+    ;;
+esac
+
+# ----------------------------------------------------------------------------
+# 실패 요약 — 마지막에 한 번에 출력
+# ----------------------------------------------------------------------------
+echo ""
+echo "=============================================="
+if [ "${#FAILED[@]}" -eq 0 ]; then
+  echo "✅ 이 단계의 설치가 정상적으로 끝났습니다."
+  echo "   터미널에 '진단' 을 입력해 [OK] 를 확인해 보세요."
+else
+  echo "⚠️  설치 중 아래 단계가 실패했습니다:"
+  for f in "${FAILED[@]}"; do
+    echo "   ✖ $f"
+  done
+  echo ""
+  echo "   → 터미널에 '진단' 을 입력한 뒤, 나온 결과 전체를 복사해서"
+  echo "     작업방을 새로 만들면 대부분 해결됩니다. (실패해도 나머지 기능은 쓸 수 있는 경우가 많아요)"
+fi
+echo "=============================================="
+
+# 설치 스크립트 자체는 항상 성공으로 종료 — 부분 실패는 '진단' 관문에서 걸러낸다 (PRD 4-1)
+exit 0
