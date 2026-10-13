@@ -304,62 +304,50 @@ function 정보이미지소제목(블록들, 사진수) {
   return 섹션.map((s, 순서) => ({...s, 순서, 점수: 점수(s.제목)}))
     .sort((a, b) => b.점수 - a.점수 || a.순서 - b.순서).slice(0, 사진수);
 }
-async function 정보이미지확정({키, 제목, 블록들, 사진수, 사용량}) {
-  const 대상 = 정보이미지소제목(블록들, 사진수);
-  const 기존사진 = (블록들 || []).filter((b) => b?.종류 === "사진");
-  const 본문 = (블록들 || []).filter((b) => b?.종류 !== "사진");
-  if (!대상.length || !기존사진.length) return 사진고르게(블록들 || []);
+function 정보이미지레이아웃(제목) {
+  const t = String(제목 || "");
+  if (/((신청|발급).*(방법|순서)|절차|방법)/.test(t)) return "numbered arrow flow with three to five verified steps";
+  if (/(서류|제출|준비물|준비할)/.test(t)) return "checklist layout with large readable Korean text";
+  if (/(주의|유의|주의사항|놓치)/.test(t)) return "warning checklist layout with clear emphasis";
+  if (/(누가|대상|자격|조건|신청할 수)/.test(t)) return "card summary layout for verified eligibility facts";
+  return "clear Korean information graphic with a strong visual hierarchy";
+}
 
-  let 계획 = [];
-  try {
-    const j = await 오픈AI(키, "/responses", {
-      model: 글모델,
-      input: [{
-        role: "developer",
-        content: "당신은 한국 네이버 블로그의 정보 이미지를 기획한다. 아래에서 정한 소제목마다 한 장의 정보 이미지에 표시할 정확한 한글 문구를 작성한다. 소제목의 질문에 직접 답해야 한다. 첫 줄은 이미지 제목, 그 뒤에는 본문에서 확인되는 핵심 항목 3~5개를 쓴다. 대상·조건은 대상자·제외·자격을, 신청·발급 방법은 실제 행동 순서를, 서류는 준비물 목록을, 주의사항은 추가 확인 사항을 쓴다. 원문에 없는 숫자·날짜·금액·기관명·전화번호를 만들지 마라. 불확실한 항목은 '최신 공고 확인'으로만 쓴다. 제목만 반복하거나 추상적인 문구를 쓰지 마라."
-      }, {
-        role: "user",
-        content: JSON.stringify({글제목: 제목, 이미지로만들소제목: 대상.map((x) => ({소제목: x.제목, 본문: x.본문}))})
-      }],
-      text: {format: {type: "json_schema", name: "info_image_plan", strict: true, schema: {
-        type: "object", additionalProperties: false, properties: {images: {type: "array", items: {type: "object", additionalProperties: false, properties: {
-          heading: {type: "string"}, layout: {type: "string"}, lines: {type: "array", items: {type: "string"}}
-        }, required: ["heading", "layout", "lines"]}}}, required: ["images"]
-      }}},
-      reasoning: {effort: "low"},
-    });
-    사용량.push({model: 글모델, input_tokens: j.usage?.input_tokens || 0, output_tokens: j.usage?.output_tokens || 0});
-    const 내용 = (j.output || []).flatMap((o) => o.content || []).find((c) => c.type === "output_text");
-    계획 = 내용 ? JSON.parse(내용.text).images || [] : [];
-  } catch {}
-
-  const 계획별제목 = new Map(계획.map((x) => [String(x.heading || "").trim(), x]));
-  const 삽입 = new Map();
-  for (const [순번, x] of 대상.entries()) {
-    const 계획한것 = 계획별제목.get(x.제목) || 계획[순번] || {};
-    const 항목 = Array.isArray(계획한것.lines) ? 계획한것.lines.map((v) => String(v).trim()).filter(Boolean) : [];
-    const 본문항목 = (x.본문 || []).flatMap((p) => String(p).split(/(?<=[.!?])\s+/).map((v) => v.trim()).filter((v) => v.length > 4));
-    const 핵심 = 항목.filter((v) => v !== x.제목);
-    for (const v of 본문항목) if (핵심.length < 5 && !핵심.includes(v)) 핵심.push(v);
-    while (핵심.length < 3) 핵심.push("최신 공고 확인");
-    const 문구 = [x.제목, ...핵심.slice(0, 5)];
-    삽입.set(x.제목, {문구, 레이아웃: String(계획한것.layout || "clear Korean information graphic with a strong visual hierarchy")});
+function 정보문구추출(제목, 본문) {
+  const 항목 = [];
+  for (const 문단 of 본문 || []) {
+    for (const 문장 of String(문단).split(/(?<=[.!?])\s+/)) {
+      const 값 = 번호없는글(문장);
+      if (값.length > 5 && !항목.includes(값)) 항목.push(값);
+      if (항목.length >= 5) break;
+    }
+    if (항목.length >= 5) break;
   }
+  while (항목.length < 3) 항목.push("공식 공고에서 확인");
+  return [번호없는글(제목), ...항목.slice(0, 5)];
+}
 
+// 원고의 소제목 식별값으로 사진을 바로 연결한다. 별도 모델 호출 없이 본문 사실만 이미지 문구에 쓴다.
+function 정보이미지확정({ 제목, 블록들, 사진수 }) {
+  const 대상 = 정보이미지소제목(블록들, 사진수);
+  const 선택 = new Map(대상.map((x) => [x.제목, x]));
+  const 기존사진 = (블록들 || []).filter((b) => b?.종류 === "사진");
   const 결과 = [];
   let 현재제목 = "";
   let 사진번호 = 0;
   const 넣음 = new Set();
-  for (const b of 본문) {
+  for (const b of 블록들 || []) {
+    if (b?.종류 === "사진") continue;
     결과.push(b);
-    if (b?.종류 === "소제목") 현재제목 = (b.글 || []).join(" ").trim();
-    if (b?.종류 === "문단" && 삽입.has(현재제목) && !넣음.has(현재제목)) {
-      const 정보 = 삽입.get(현재제목);
-      const 바탕사진 = 기존사진[사진번호++] || {종류: "사진", 글: [], 칸: [], 프롬프트: ""};
-      결과.push({...바탕사진, 종류: "사진", 이미지유형: "정보", 정보문구: 정보.문구, 프롬프트: 정보.레이아웃});
+    if (b?.종류 === "소제목") 현재제목 = 번호없는글((b.글 || []).join(" "));
+    if (b?.종류 === "문단" && 선택.has(현재제목) && !넣음.has(현재제목)) {
+      const 섹션 = 선택.get(현재제목);
+      const 바탕사진 = 기존사진[사진번호++] || { 종류: "사진", 글: [], 칸: [], 프롬프트: "" };
+      결과.push({ ...바탕사진, 종류: "사진", 글: [], 칸: [], 이미지유형: "정보", 정보문구: 정보문구추출(현재제목, 섹션.본문), 프롬프트: 정보이미지레이아웃(현재제목) });
       넣음.add(현재제목);
     }
   }
+  if (넣음.size !== 사진수) throw new Error(`정보 이미지 ${사진수}장의 소제목 연결을 검증하지 못했습니다.`);
   return 결과;
 }
 
