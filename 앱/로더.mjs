@@ -17,7 +17,7 @@ import {dirname, join} from "node:path";
 import {pathToFileURL} from "node:url";
 
 export const 버전 = "2026-09-28b";
-const 저장소 = "makeit-edu/makeit-middle-kit";
+const 저장소 = "seongsung54-maker/sse";
 const 브랜치 = "main";
 const 목록파일 = "앱/목록.json";
 const 진입파일 = "앱/승인글.mjs";
