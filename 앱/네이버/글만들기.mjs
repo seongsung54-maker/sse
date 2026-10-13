@@ -16,7 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // 고칠 때마다 올린다 (앱/배포.sh 가 커밋에 고정해 배포한다).
-export const 버전 = "2026-09-23e";
+export const 버전 = "2026-10-14h";
 
 const 여기 = path.dirname(fileURLToPath(import.meta.url));
 const 프로젝트 = path.resolve(여기, "..");
@@ -106,7 +106,44 @@ export async function 벤치마크가져오기(주소) {
   };
 }
 
-export async function 원고쓰기({ 키, 벤치마크, 키워드, 사진수 = 5 }) {
+
+function 정부정책키워드(키워드) {
+  return /(지원|보조금|복지|연금|바우처|장려금|수당|급여|환급|감면|정책|공고|신청|발급|상생카드|지역화폐|주택|보험|돌봄|의료|교육|교통)/.test(String(키워드 || ""));
+}
+
+function 응답글자(응답) {
+  const 본문 = (응답.output || []).flatMap((o) => o.content || []).find((c) => c.type === "output_text");
+  if (!본문) throw new Error("모델이 본문을 돌려주지 않았습니다.");
+  return 본문.text;
+}
+
+async function 공식자료조사({ 키, 키워드 }) {
+  const 스키마 = { type: "object", additionalProperties: false, properties: {
+    제도명: { type: "string" }, 공식기관: { type: "array", items: { type: "string" } },
+    사실: { type: "array", items: { type: "string" } }, 미확인: { type: "array", items: { type: "string" } }
+  }, required: ["제도명", "공식기관", "사실", "미확인"] };
+  const 조사 = await 오픈AI(키, "/responses", {
+    model: 글모델,
+    tools: [{ type: "web_search_preview" }],
+    input: [
+      { role: "developer", content: "정부정책 글을 위한 사실 조사만 수행한다. 정부24·복지로·담당 부처·공단·지자체 공식 사이트만 우선 사용한다. 공식 페이지에 PDF·HWP·DOCX 첨부파일이 있으면 그 파일도 확인한다. 현재 시행 기준과 예정안을 구분한다. 확인되지 않은 숫자·조건은 추측하지 말고 미확인에 넣는다." },
+      { role: "user", content: "조사 키워드: " + 키워드 + "\n대상·금액·기간·신청처·서류·절차·주의사항을 공식 자료에서만 정리해라." }
+    ],
+    text: { format: { type: "json_schema", name: "official_policy_facts", schema: 스키마, strict: true } },
+    reasoning: { effort: "low" },
+  });
+  const 자료 = JSON.parse(응답글자(조사));
+  if (!자료.사실.length) throw new Error("공식 자료에서 확인된 사실을 찾지 못했습니다.");
+  return { 자료, 사용량: { model: 글모델, input_tokens: 조사.usage?.input_tokens || 0, output_tokens: 조사.usage?.output_tokens || 0 } };
+}
+
+function 번호없는글(글) {
+  return String(글 || "").replace(/^\s*\d+\s*[.)·-]\s*/, "").trim();
+}
+
+export async function 원고쓰기({ 키, 벤치마크, 키워드, 사진수 = 3 }) {
+  const 정책글 = !벤치마크 && 정부정책키워드(키워드);
+  const 공식조사 = 정책글 ? await 공식자료조사({ 키, 키워드 }) : null;
   const 뼈대설명 = 벤치마크
     ? `아래 '벤치마크 구조' 는 참고할 글의 뼈대다. 섹션 순서와 표 · 사진 배치는 그대로 따르되, 문장은 전부 새로 써라.
 벤치마크 글의 문장을 기억하고 있더라도 절대 그대로 옮기지 마라. '문단요지' 는 어떤 내용을 다뤘는지 알기 위한 것이지 베낄 문장이 아니다. 제목도 새로 짓되 핵심 키워드는 유지한다.
@@ -121,7 +158,24 @@ export async function 원고쓰기({ 키, 벤치마크, 키워드, 사진수 = 5
   3줄: 지금 바로 확인해야 하는 이유와 행동 유도 (기한·놓치면 손해·1분이면 확인 같은 말로).
 - 3줄 사이에는 빈 줄("") 을 넣지 않는다. 그 다음 문단부터 평소대로.
 ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_후킹참고.length ? `- '도입부_후킹참고' 는 참고 글의 도입부다. 어떤 순서로 독자를 끌어당기는지, 어느 정도 세게 말하는지, 무엇을 약속하는지를 배워라. 그 강도와 구조를 그대로 살리되 문장·표현·예시는 전부 새로 써라. 한 문장이라도 그대로 옮기면 실패다.` : ""}`;
-  const 지시 = `당신은 한국 네이버 블로그 정보성 글을 쓰는 작가다. 존댓말, 짧은 문장, 40~60대 독자가 읽기 쉬운 말투.
+  const 공식사실 = 공식조사 ? `\n[공식 조사 결과]\n제도명: ${공식조사.자료.제도명}\n공식기관: ${공식조사.자료.공식기관.join(", ")}\n확인된 사실:\n${공식조사.자료.사실.map((x) => "- " + x).join("\n")}\n미확인 항목:\n${공식조사.자료.미확인.map((x) => "- " + x).join("\n")}` : "";
+  const 지시 = `당신은 한국 네이버 블로그 정보성 글을 쓰는 작가다. 존댓말, 짧은 문장, 50대 이상 독자가 읽기 쉬운 말투.
+[정부정책 글의 필수 기준]
+- 정부정책 글은 아래 공식 조사 결과의 사실만 쓴다. 공식 자료에 없는 금액·할인율·연령·거주지·기간·서류·기관명·전화번호를 만들거나 가능하다고 추측하지 않는다.
+- 현재 시행 기준과 예정된 변경을 섞지 않는다. 예정은 반드시 시행 전이라고 적는다.
+- 공식 문장을 세 어절 이상 그대로 옮기지 않는다. 숫자·날짜·기관명·서류명은 유지하고 문장만 쉽게 다시 쓴다.
+- 공식 페이지에 PDF·HWP·DOCX 첨부파일이 있으면 그 내용을 조사 기준에 포함한다.
+- 경험담을 요구하거나 직접 해 본 것처럼 쓰지 않는다. 50대 이상은 독자층일 뿐 대상 자격처럼 쓰지 않는다.
+- 지원금이 아닌 카드·서비스에는 지원금·최대금액 소제목을 억지로 만들지 않는다.
+[제목]
+- 검색 키워드를 맨 앞에 놓고 38자 이내로 쓴다.
+- 독자층·얻는 정보·궁금증을 담되, 숫자는 공식 수치 또는 본문에서 실제로 설명하는 항목 수일 때만 쓴다.
+- 확인되지 않은 할인율·절약액·가능 여부를 제목에 쓰지 않는다.
+[형식]
+- 인사말 없이 시작하고, 첫 문단은 무엇을·누가·어디서 또는 언제·무엇을 얻는지 확인된 사실만으로 요약한다.
+- 소제목은 번호 없는 질문형 문장 5개로 쓴다. 마크다운 기호, 표, HTML, URL, 【소제목】은 쓰지 않는다.
+- 문단은 2~3개의 완전한 문장으로 자연스럽게 이어 쓰고, 한 문장마다 줄을 바꾸거나 빈 줄로 쪼개지 않는다.
+- 해시태그 7~10개는 마지막 문단에만 쓴다. 사진 블록은 만들지 않는다.\n${공식사실}
 ${뼈대설명}
 ${후킹규칙}
 
@@ -172,11 +226,11 @@ ${후킹규칙}
     if (!본문) throw new Error("글 모델이 본문을 안 돌려줌: " + JSON.stringify(응답).slice(0, 300));
     return JSON.parse(본문.text);
   };
-  const 쓴돈 = [{ model: 글모델, input_tokens: j.usage?.input_tokens || 0, output_tokens: j.usage?.output_tokens || 0 }];
+  const 쓴돈 = [...(공식조사 ? [공식조사.사용량] : []), { model: 글모델, input_tokens: j.usage?.input_tokens || 0, output_tokens: j.usage?.output_tokens || 0 }];
   let 원고 = 꺼내기(j);
   // 분량 보충 — 싼 모델은 글을 짧게 쓰는 버릇이 있다 (2026-09-23 실측 704자). 모자라면 한 번 늘려 쓰게 한다. 수강생에게는 알리지 않는다.
   const 글자수 = (w) => (w.블록 || []).filter((b) => b.종류 === "문단").flatMap((b) => b.글 || []).join("").replace(/\s/g, "").length;
-  if (글자수(원고) < 1800) {
+  if (글자수(원고) < 1800 && !정책글) {
     const j2 = await 오픈AI(키, "/responses", {
       model: 글모델,
       input: [
@@ -217,7 +271,12 @@ ${후킹규칙}
     }).sort((a, b) => b.위치 - a.위치);
     for (const x of 넣을곳) 원고.블록.splice(x.위치, 0, { 종류: "사진", 글: [], 칸: [], 프롬프트: x.프롬프트, 이미지유형: "일러스트", 정보문구: [] });
   }
-  원고.블록 = await 정보이미지확정({키, 제목: 원고.제목, 블록들: 원고.블록 || [], 사진수, 사용량: 쓴돈});
+  for (const b of 원고.블록 || []) {
+    if (b?.종류 === "소제목") b.글 = [번호없는글((b.글 || []).join(" "))];
+    if (b?.종류 === "문단") b.글 = [(b.글 || []).filter(Boolean).join(" ").replace(/[#|]/g, "").trim()];
+  }
+  if (키워드 && !원고.제목.startsWith(키워드)) 원고.제목 = `${키워드}, ${원고.제목}`.slice(0, 38);
+  원고.블록 = 정보이미지확정({키, 제목: 원고.제목, 블록들: 원고.블록 || [], 사진수, 사용량: 쓴돈});
   Object.defineProperty(원고, "_사용량", { value: 쓴돈, enumerable: false });
   return 원고;
 }
@@ -234,10 +293,10 @@ function 정보이미지소제목(블록들, 사진수) {
   }
   const 점수 = (제목) => {
     const t = String(제목 || "");
-    if (/(신청|발급|절차|방법)/.test(t)) return 100;
-    if (/(서류|제출|준비물)/.test(t)) return 95;
-    if (/(주의|유의|주의사항)/.test(t)) return 90;
-    if (/(대상|자격|조건)/.test(t)) return 85;
+    if (/((신청|발급).*(방법|순서)|절차|방법)/.test(t)) return 100;
+    if (/(서류|제출|준비물|준비할)/.test(t)) return 95;
+    if (/(주의|유의|주의사항|놓치)/.test(t)) return 90;
+    if (/(누가|대상|자격|조건|신청할 수)/.test(t)) return 85;
     if (/(금액|한도|지원금|혜택)/.test(t)) return 80;
     if (/(기한|기간|사용처)/.test(t)) return 75;
     return 10;
@@ -396,7 +455,7 @@ export function 슬러그(글자, 최대 = 40) {
 }
 
 // 글 하나 = 폴더 하나. 03_쓴글/2026-09-17_키워드/ 안에 원고.json 과 키워드-1.png … 가 들어간다.
-export async function 만들기({ 키, 벤치마크, 벤치마크URL, 키워드, 사진수 = 5, 저장폴더 }) {
+export async function 만들기({ 키, 벤치마크, 벤치마크URL, 키워드, 사진수 = 3, 저장폴더 }) {
   if (!키) throw new Error("OpenAI 키가 없습니다");
   if (!벤치마크 && !벤치마크URL && !키워드) throw new Error("키워드나 벤치마크 글 주소가 필요합니다");
   const 기록 = [];
@@ -406,7 +465,10 @@ export async function 만들기({ 키, 벤치마크, 벤치마크URL, 키워드,
     if (!사진수) 사진수 = Math.min(6, Math.max(3, 벤치마크.사진수));
   }
   const 원고 = await 원고쓰기({ 키, 벤치마크, 키워드, 사진수 });
-  기록.push({ 단계: "글", 제목: 원고.제목, 블록수: 원고.블록.length });
+  const 검증사진 = 원고.블록.filter((b) => b.종류 === "사진");
+  if (검증사진.length !== 사진수) throw new Error(`이미지는 정확히 ${사진수}장이어야 합니다.`);
+  if (원고.블록.filter((b) => b.종류 === "소제목").some((b) => /^\\s*\\d+\\s*[.)]/.test((b.글 || []).join(" ")))) throw new Error("소제목 번호를 제거하지 못했습니다.");
+  기록.push({ 단계: "글", 제목: 원고.제목, 블록수: 원고.블록.length, 검증: "통과" });
 
   // 폴더 이름: 날짜_키워드. 키워드가 없으면(벤치마크 모드) 새 제목의 앞부분을 쓴다.
   const 핵심 = 슬러그(키워드 || 원고.제목.split(/[,|(:·]/)[0], 30);
