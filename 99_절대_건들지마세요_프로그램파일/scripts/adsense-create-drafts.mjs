@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import {createHash} from "node:crypto";
+import {createHash, randomInt} from "node:crypto";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -360,6 +360,25 @@ function titleKey(title) {
   return normalizeSpaces(title)
     .normalize("NFC")
     .toLowerCase();
+}
+
+function selectRandomUnusedTitleEntries(entries, usedTitleKeys, limit, randomIndex = randomInt) {
+  const seen = new Set(usedTitleKeys);
+  const available = [];
+  for (const entry of entries) {
+    const key = titleKey(entry.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    available.push(entry);
+  }
+  const availableCount = available.length;
+  const count = limit > 0 ? Math.min(limit, availableCount) : availableCount;
+  // 부분 Fisher–Yates: 중복 없이 추첨하며 제목의 카테고리 정보도 함께 유지한다.
+  for (let i = 0; i < count; i += 1) {
+    const j = i + randomIndex(availableCount - i);
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  return {entries: available.slice(0, count), availableCount};
 }
 
 function readJsonArray(filePath) {
@@ -754,7 +773,11 @@ async function fetchAllPostTitles({siteUrl, username, appPassword}) {
       return {titles, dates, complete: false, reason: error instanceof Error ? error.message : String(error)};
     }
     // 마지막 페이지를 넘어서면 워드프레스가 400을 준다 — 정상 종료로 본다
-    if (response.status === 400) break;
+    if (response.status === 400) {
+      const error = await response.json().catch(() => null);
+      if (page > 1 && error?.code === "rest_post_invalid_page_number") return {titles, dates, complete: true};
+      return {titles, dates, complete: false, reason: "워드프레스 글 목록 요청 오류 (400)"};
+    }
     if (!response.ok) return {titles, dates, complete: false, reason: `상태 코드 ${response.status}`};
     let data;
     try {
@@ -772,14 +795,14 @@ async function fetchAllPostTitles({siteUrl, username, appPassword}) {
         if (Number.isFinite(t) && t > Date.now() - 60 * 60 * 1000) dates.push(t);
       }
     }
-    if (data.length < perPage) break;
+    if (data.length < perPage) return {titles, dates, complete: true};
   }
-  return {titles, dates, complete: true};
+  return {titles, dates, complete: false, reason: "글 목록 조회 한도(3000개)를 넘었습니다"};
 }
 
 async function findExistingPostByTitle({siteUrl, username, appPassword, title}) {
   const credentials = wordpressCredentials(username, appPassword);
-  const url = `${wordpressBaseUrl(siteUrl)}/wp-json/wp/v2/posts?context=edit&status=draft,pending,future,publish&search=${encodeURIComponent(title)}&per_page=50&_fields=id,title,status`;
+  const url = `${wordpressBaseUrl(siteUrl)}/wp-json/wp/v2/posts?context=edit&status=draft,pending,future,publish,private&search=${encodeURIComponent(title)}&per_page=50&_fields=id,title,status`;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const response = await wpFetch(url, {
@@ -798,8 +821,7 @@ async function findExistingPostByTitle({siteUrl, username, appPassword, title}) 
     } catch (error) {
       if (attempt === 3) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(`  (주의: 중복 확인 실패 - ${message} / 중복 확인 없이 발행을 진행함)`);
-        return null;
+        throw new Error(`중복 확인 실패로 이 제목의 생성을 중단합니다: ${message}`);
       }
       await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
     }
@@ -1678,7 +1700,8 @@ if (!includeUsedTitles) {
   if (existingOnWordPress.complete) {
     console.log(`워드프레스에 이미 있는 글 ${existingOnWordPress.titles.length}개 확인 — 같은 제목은 빼고 진행합니다.`);
   } else {
-    console.log(`(주의: 워드프레스 글 목록을 다 못 읽었어요 - ${existingOnWordPress.reason} / 글마다 발행 직전에 다시 확인합니다)`);
+    console.error(`워드프레스 글 목록을 다 읽지 못해 중복 방지를 위해 중단합니다: ${existingOnWordPress.reason}`);
+    process.exit(1);
   }
 }
 
@@ -1686,10 +1709,10 @@ const usedTitleKeys = new Set([
   ...previousDraftHistory.map((entry) => titleKey(entry.title)),
   ...existingOnWordPress.titles.map((title) => titleKey(title)),
 ]);
-const availableTitleEntries = includeUsedTitles
-  ? allTitleEntries
-  : allTitleEntries.filter((entry) => !usedTitleKeys.has(titleKey(entry.title)));
-const titleEntries = limit > 0 ? availableTitleEntries.slice(0, limit) : availableTitleEntries;
+const selection = selectRandomUnusedTitleEntries(
+  allTitleEntries, includeUsedTitles ? new Set() : usedTitleKeys, limit,
+);
+const titleEntries = selection.entries;
 const titles = titleEntries.map((entry) => entry.title);
 if (titles.length === 0) {
   if (allTitleEntries.length > 0 && usedTitleKeys.size > 0 && !includeUsedTitles) {
@@ -1716,9 +1739,9 @@ mkdirSync(visibleOutputDir, {recursive: true});
 
 console.log(`애드센스 사이트 ${site}번 임시글 생성 시작`);
 console.log(`제목 파일: ${titlesPath}`);
-console.log(`제목 ${titles.length}개 선택 / 전체 ${allTitleEntries.length}개 / 이전 성공 ${previousDraftHistory.length}개 자동 제외 / 모델 ${model} / 본문 ${minChars}자 이상 목표`);
+console.log(`제목 ${titles.length}개 무작위 선택 / 전체 ${allTitleEntries.length}개 / 이전 성공 ${previousDraftHistory.length}개 자동 제외 / 모델 ${model} / 본문 ${minChars}자 이상 목표`);
 if (limit > 0) {
-  console.log(`제목 ${allTitleEntries.length}개 중 아직 안 쓴 제목 ${availableTitleEntries.length}개 / 이번에 ${titles.length}개를 만듭니다.`);
+  console.log(`제목 ${allTitleEntries.length}개 중 아직 안 쓴 제목 ${selection.availableCount}개 / 이번에 ${titles.length}개를 만듭니다.`);
 }
 if (titleCatalog.categories.length > 0) {
   console.log(`제목 파일 카테고리 매핑: 대표 ${titleCatalog.categories.length}개 / 세부 ${titleCatalog.categories.reduce((sum, category) => sum + category.children.length, 0)}개`);
