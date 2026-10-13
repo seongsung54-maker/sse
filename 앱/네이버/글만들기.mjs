@@ -202,9 +202,87 @@ ${후킹규칙}
     }).sort((a, b) => b.위치 - a.위치);
     for (const x of 넣을곳) 원고.블록.splice(x.위치, 0, { 종류: "사진", 글: [], 칸: [], 프롬프트: x.프롬프트, 이미지유형: "일러스트", 정보문구: [] });
   }
-  원고.블록 = 정보이미지정리(사진고르게(원고.블록 || []), 사진수);
+  원고.블록 = await 정보이미지확정({키, 제목: 원고.제목, 블록들: 원고.블록 || [], 사진수, 사용량: 쓴돈});
   Object.defineProperty(원고, "_사용량", { value: 쓴돈, enumerable: false });
   return 원고;
+}
+
+// 소제목을 먼저 골라 정보 이미지로 확정한다. 글 모델이 사진 종류를 임의로 고르지 못하게 한다.
+function 정보이미지소제목(블록들, 사진수) {
+  const 섹션 = [];
+  let 현재 = null;
+  for (const b of 블록들 || []) {
+    if (b?.종류 === "소제목") {
+      현재 = {제목: (b.글 || []).join(" ").trim(), 본문: []};
+      섹션.push(현재);
+    } else if (현재 && b?.종류 === "문단") 현재.본문.push((b.글 || []).join(" ").trim());
+  }
+  const 점수 = (제목) => {
+    const t = String(제목 || "");
+    if (/(신청|발급|절차|방법)/.test(t)) return 100;
+    if (/(서류|제출|준비물)/.test(t)) return 95;
+    if (/(주의|유의|주의사항)/.test(t)) return 90;
+    if (/(대상|자격|조건)/.test(t)) return 85;
+    if (/(금액|한도|지원금|혜택)/.test(t)) return 80;
+    if (/(기한|기간|사용처)/.test(t)) return 75;
+    return 10;
+  };
+  return 섹션.map((s, 순서) => ({...s, 순서, 점수: 점수(s.제목)}))
+    .sort((a, b) => b.점수 - a.점수 || a.순서 - b.순서).slice(0, 사진수);
+}
+async function 정보이미지확정({키, 제목, 블록들, 사진수, 사용량}) {
+  const 대상 = 정보이미지소제목(블록들, 사진수);
+  const 기존사진 = (블록들 || []).filter((b) => b?.종류 === "사진");
+  const 본문 = (블록들 || []).filter((b) => b?.종류 !== "사진");
+  if (!대상.length || !기존사진.length) return 사진고르게(블록들 || []);
+
+  let 계획 = [];
+  try {
+    const j = await 오픈AI(키, "/responses", {
+      model: 글모델,
+      input: [{
+        role: "developer",
+        content: "당신은 한국 네이버 블로그의 정보 이미지를 기획한다. 아래에서 정한 소제목마다 한 장의 정보 이미지에 표시할 정확한 한글 문구를 작성한다. 소제목의 질문에 직접 답해야 한다. 첫 줄은 이미지 제목, 그 뒤에는 본문에서 확인되는 핵심 항목 3~5개를 쓴다. 대상·조건은 대상자·제외·자격을, 신청·발급 방법은 실제 행동 순서를, 서류는 준비물 목록을, 주의사항은 추가 확인 사항을 쓴다. 원문에 없는 숫자·날짜·금액·기관명·전화번호를 만들지 마라. 불확실한 항목은 '최신 공고 확인'으로만 쓴다. 제목만 반복하거나 추상적인 문구를 쓰지 마라."
+      }, {
+        role: "user",
+        content: JSON.stringify({글제목: 제목, 이미지로만들소제목: 대상.map((x) => ({소제목: x.제목, 본문: x.본문}))})
+      }],
+      text: {format: {type: "json_schema", name: "info_image_plan", strict: true, schema: {
+        type: "object", additionalProperties: false, properties: {images: {type: "array", items: {type: "object", additionalProperties: false, properties: {
+          heading: {type: "string"}, layout: {type: "string"}, lines: {type: "array", items: {type: "string"}}
+        }, required: ["heading", "layout", "lines"]}}}, required: ["images"]
+      }},
+      reasoning: {effort: "low"},
+    });
+    사용량.push({model: 글모델, input_tokens: j.usage?.input_tokens || 0, output_tokens: j.usage?.output_tokens || 0});
+    const 내용 = (j.output || []).flatMap((o) => o.content || []).find((c) => c.type === "output_text");
+    계획 = 내용 ? JSON.parse(내용.text).images || [] : [];
+  } catch {}
+
+  const 계획별제목 = new Map(계획.map((x) => [String(x.heading || "").trim(), x]));
+  const 삽입 = new Map();
+  for (const x of 대상) {
+    const 계획한것 = 계획별제목.get(x.제목);
+    const 문구 = Array.isArray(계획한것?.lines) ? 계획한것.lines.map((v) => String(v).trim()).filter(Boolean).slice(0, 6) : [];
+    if (문구.length >= 4) 삽입.set(x.제목, {문구, 레이아웃: String(계획한것.layout || "clear Korean information graphic with a strong visual hierarchy")});
+  }
+  if (!삽입.size) return 사진고르게(블록들 || []);
+
+  const 결과 = [];
+  let 현재제목 = "";
+  let 사진번호 = 0;
+  const 넣음 = new Set();
+  for (const b of 본문) {
+    결과.push(b);
+    if (b?.종류 === "소제목") 현재제목 = (b.글 || []).join(" ").trim();
+    if (b?.종류 === "문단" && 삽입.has(현재제목) && !넣음.has(현재제목)) {
+      const 정보 = 삽입.get(현재제목);
+      const 바탕사진 = 기존사진[사진번호++] || {종류: "사진", 글: [], 칸: [], 프롬프트: ""};
+      결과.push({...바탕사진, 종류: "사진", 이미지유형: "정보", 정보문구: 정보.문구, 프롬프트: 정보.레이아웃});
+      넣음.add(현재제목);
+    }
+  }
+  return 결과;
 }
 
 // 정보 이미지가 필요한 소제목만 정보형으로 남긴다. 나머지는 글자 없는 장면형으로 만든다.
