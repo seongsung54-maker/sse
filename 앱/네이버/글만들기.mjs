@@ -11,7 +11,7 @@
 //     최종 그림 프롬프트는 이 파일의 최종그림프롬프트() 가 만든다. 글 모델에게 맡기지 않는다.
 //   · process 전역을 쓰지 않는다 (Codex REPL 에서도 돌아야 한다).
 
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +20,13 @@ export const 버전 = "2026-09-23e";
 
 const 여기 = path.dirname(fileURLToPath(import.meta.url));
 const 프로젝트 = path.resolve(여기, "..");
+const 정보이미지기준파일 = path.join(여기, "이미지프롬프트_기준.md");
+let 정보이미지기준캐시 = "";
+async function 정보이미지기준읽기() {
+  if (정보이미지기준캐시) return 정보이미지기준캐시;
+  try { 정보이미지기준캐시 = await readFile(정보이미지기준파일, "utf8"); } catch {}
+  return 정보이미지기준캐시 || "Use a clean Korean presentation-style information graphic: bright background, generous whitespace, navy purple and light blue accents, large readable Korean type, only verified facts from the related section.";
+}
 
 // 2026-09-23 진현님: 글 1개 50원 이하 (승인글처럼). 예전 gpt-5.2 + gpt-image-2 보통 화질은 약 390원이었고 그중 사진 3장이 85%.
 // 그래서 글은 승인글과 같은 gpt-5.4-mini. 사진은 진현님 결정으로 한 단계 위 gpt-image-2 저화질 (장당 약 10원, 1-mini 저화질은 약 4원이지만 품질 차이가 큼).
@@ -55,9 +62,11 @@ const 원고형식 = {
           종류: { type: "string", enum: ["문단", "소제목", "인용구", "표", "구분선", "사진"] },
           글: { type: "array", items: { type: "string" }, description: "문단은 줄 배열, 소제목·인용구는 한 줄짜리 배열, 나머지는 빈 배열" },
           칸: { type: "array", items: { type: "string" }, description: "표만. 3열 기준으로 왼쪽→오른쪽, 위→아래. 최대 9칸. 나머지는 빈 배열" },
-          프롬프트: { type: "string", description: "사진만. 그릴 장면을 영어로 1~2문장 묘사 (사물·장소·상황·분위기만, 글자가 나올 장면 금지). 나머지는 빈 문자열" },
+          프롬프트: { type: "string", description: "사진만. 일러스트는 영어 장면 묘사, 정보 이미지는 시각 요소와 레이아웃을 영어로 묘사. 나머지는 빈 문자열" },
+          이미지유형: { type: "string", enum: ["일러스트", "정보"], description: "사진만. 신청·대상·조건·서류·기한·금액·혜택·주의처럼 한눈에 정리할 소제목만 정보, 나머지는 일러스트" },
+          정보문구: { type: "array", items: { type: "string" }, description: "정보 사진만. 이미지에 정확히 표시할 한글 문구: 제목 1개와 핵심 항목 최대 3개. 본문에서 확인된 사실만. 일러스트와 나머지는 빈 배열" },
         },
-        required: ["종류", "글", "칸", "프롬프트"],
+        required: ["종류", "글", "칸", "프롬프트", "이미지유형", "정보문구"],
       },
     },
   },
@@ -125,7 +134,12 @@ ${후킹규칙}
 - 사진은 총 ${사진수}장. 각 사진의 '프롬프트' 는 그 섹션의 메시지를 상징하는 장면을 영어로 1~2문장 묘사한다. 원문 문장을 그리지 않는다.
   사물·장소·상황·분위기만 쓴다. 간판·문서·서류·화면·책·표지판·현수막·포스터처럼 글자가 들어갈 만한 것은 넣지 않는다. 한국어 단어·제도 이름·숫자는 쓰지 않는다.
   사람을 그릴 때는 "seen from behind or in profile, face not visible" 를 넣는다. 화풍·글자 금지 규칙은 프로그램이 붙이므로 쓰지 않는다.
-- 사진 블록은 소제목 바로 아래 첫 문단 다음에 하나씩 둔다. 글 끝에 몰아 넣지 않는다.
+- 사진은 총 ${사진수}장으로 고정한다. 모든 소제목에 사진을 넣지 않는다.
+- 소제목이 지원 대상·자격·조건, 신청·발급 절차, 제출 서류, 기한, 지원 금액·한도·혜택, 사용처, 주의사항·유의사항이면 우선 '정보' 사진으로 고른다. 그 외의 소제목은 '일러스트'로 둔다.
+- '정보' 사진은 정보 이미지를 써도 이해가 좋아지는 소제목에만 쓴다. '정보문구'에는 이미지에 정확히 표시할 한글을 제목 1개와 항목 최대 3개로 넣는다. 본문의 확인된 내용만 쓰며, 확인되지 않은 숫자·날짜·금액·기관명은 넣지 않는다.
+- '정보' 사진의 프롬프트는 해당 소제목에 맞는 레이아웃을 영어로 적는다. 절차는 순서도, 대상·조건은 카드형 요약, 금액·한도는 큰 숫자 중심, 주의사항은 체크형 요약처럼 가장 알맞은 구성을 고른다.
+- '일러스트' 사진은 기존 규칙처럼 글자가 없는 영어 장면 묘사와 빈 '정보문구' 배열을 쓴다.
+- 사진 블록은 선택된 소제목 바로 아래 첫 문단 다음에 하나씩 둔다. 글 끝에 몰아 넣지 않는다.
 - 구분선은 마지막 문단 앞에 한 번.
 - 전체 문단 글자 수(띄어쓰기 빼고)는 1,800~2,600자. 1,800자보다 짧으면 실패다.`;
 
@@ -184,11 +198,27 @@ ${후킹규칙}
       if (원고.블록[위치] && 원고.블록[위치].종류 === "문단") 위치 += 1;
       return { 위치, 프롬프트: 장면들[k] || `A calm, warm everyday scene that suggests: ${원고.제목}` };
     }).sort((a, b) => b.위치 - a.위치);
-    for (const x of 넣을곳) 원고.블록.splice(x.위치, 0, { 종류: "사진", 글: [], 칸: [], 프롬프트: x.프롬프트 });
+    for (const x of 넣을곳) 원고.블록.splice(x.위치, 0, { 종류: "사진", 글: [], 칸: [], 프롬프트: x.프롬프트, 이미지유형: "일러스트", 정보문구: [] });
   }
-  원고.블록 = 사진고르게(원고.블록 || []);
+  원고.블록 = 정보이미지정리(사진고르게(원고.블록 || []), 사진수);
   Object.defineProperty(원고, "_사용량", { value: 쓴돈, enumerable: false });
   return 원고;
+}
+
+// 정보 이미지가 필요한 소제목만 정보형으로 남긴다. 나머지는 글자 없는 장면형으로 만든다.
+function 정보이미지정리(블록들, 사진수) {
+  const 중요소제목 = /(대상|자격|조건|신청|발급|제출|서류|기한|금액|한도|혜택|지원|사용처|주의|유의)/;
+  let 현재소제목 = "";
+  let 사진개수 = 0;
+  return (블록들 || []).flatMap((b) => {
+    if (b?.종류 === "소제목") 현재소제목 = (b.글 || []).join(" ");
+    if (b?.종류 !== "사진") return [b];
+    사진개수 += 1;
+    if (사진개수 > 사진수) return [];
+    const 문구 = Array.isArray(b.정보문구) ? b.정보문구.filter((x) => String(x).trim()).slice(0, 4) : [];
+    const 정보 = b.이미지유형 === "정보" && 중요소제목.test(현재소제목) && 문구.length >= 2;
+    return [{...b, 이미지유형: 정보 ? "정보" : "일러스트", 정보문구: 정보 ? 문구 : []}];
+  });
 }
 
 // 사진 자리 고르기 — 글 모델이 사진을 글 끝에 몰아 넣을 때가 있다 (2026-09-23 실측: 사진 3장이 전부 맨 아래에 들어감).
@@ -215,6 +245,20 @@ export function 사진고르게(블록들) {
   return 결과;
 }
 
+async function 최종정보그림프롬프트(장면, 정보문구) {
+  const 기준 = await 정보이미지기준읽기();
+  const 표시문구 = 정보문구.map((x) => String(x).trim()).filter(Boolean).join("\n");
+  return [
+    "Create one polished Korean Naver-blog information graphic. Use only the exact Korean text below; do not add, remove, paraphrase, or invent any text, number, date, amount, institution, logo, or label.",
+    "Exact Korean text to render, each line clearly and legibly:",
+    표시문구,
+    "Layout brief: " + String(장면 || "clear visual hierarchy with a single focused message"),
+    "Design specification:",
+    기준,
+    "Do not include logos, brand marks, faces of real people, copyrighted characters, watermarks, or unrelated decorative icons.",
+  ].join("\n");
+}
+
 // 최종 그림 프롬프트 — 어떤 언어의 글자도 나오지 않게 프로그램이 직접 만든다.
 // 한글이 프롬프트에 있으면 모델이 그 글자를 그림에 그려 넣으므로 장면 묘사에서 한글·따옴표 안 문구를 지운다.
 export function 최종그림프롬프트(장면) {
@@ -231,10 +275,11 @@ export function 최종그림프롬프트(장면) {
   ].join("\n");
 }
 
-export async function 그림그리기({ 키, 프롬프트, 저장경로 }) {
+export async function 그림그리기({ 키, 프롬프트, 저장경로, 정보문구 = [] }) {
+  const 그림프롬프트 = 정보문구.length ? await 최종정보그림프롬프트(프롬프트, 정보문구) : 최종그림프롬프트(프롬프트);
   const j = await 오픈AI(키, "/images/generations", {
     model: 그림모델,
-    prompt: 최종그림프롬프트(프롬프트),
+    prompt: 그림프롬프트,
     size: "1024x1024",
     quality: 그림화질,
     n: 1,
@@ -278,7 +323,7 @@ export async function 만들기({ 키, 벤치마크, 벤치마크URL, 키워드,
     const 번호 = ++n;
     const 파일 = `${핵심}-${번호}.png`;
     try {
-      const 그림 = await 그림그리기({ 키, 프롬프트: b.프롬프트, 저장경로: path.join(폴더, 파일) });
+      const 그림 = await 그림그리기({ 키, 프롬프트: b.프롬프트, 정보문구: b.이미지유형 === "정보" ? b.정보문구 : [], 저장경로: path.join(폴더, 파일) });
       사용량.push(그림.사용량);
       b.파일 = 파일;
       기록.push({ 단계: `사진${번호}`, 파일, 프롬프트: b.프롬프트.slice(0, 60) });
