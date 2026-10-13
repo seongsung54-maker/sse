@@ -1,8 +1,8 @@
 {
-  "버전": "2026-09-28c",
+  "버전": "2026-10-14a",
   "정지": false,
   "정지안내": "",
-  "커밋": "5bc9216dc12f107e42aba79a5108ee720295af33",
+  "커밋": "726b9c838e9c0734e362b8f4b75cc4f3f1ab871a",
   "파일": [
     "99_절대_건들지마세요_프로그램파일/scripts/adsense-auto-drafts.mjs",
     "99_절대_건들지마세요_프로그램파일/scripts/adsense-create-drafts.mjs",
@@ -24,6 +24,7 @@
     "앱/네이버/naver-typing.mjs",
     "앱/네이버/recipe.json",
     "앱/네이버/글만들기.mjs",
+    "앱/네이버/이미지프롬프트_기준.md",
     "앱/메킷애센.mjs",
     "앱/메킷애센/자료/answer-readiness.md",
     "앱/메킷애센/자료/classroom.md",
