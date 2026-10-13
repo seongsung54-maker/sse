@@ -266,7 +266,7 @@ async function 정보이미지확정({키, 제목, 블록들, 사진수, 사용�
         type: "object", additionalProperties: false, properties: {images: {type: "array", items: {type: "object", additionalProperties: false, properties: {
           heading: {type: "string"}, layout: {type: "string"}, lines: {type: "array", items: {type: "string"}}
         }, required: ["heading", "layout", "lines"]}}}, required: ["images"]
-      }},
+      }}},
       reasoning: {effort: "low"},
     });
     사용량.push({model: 글모델, input_tokens: j.usage?.input_tokens || 0, output_tokens: j.usage?.output_tokens || 0});
