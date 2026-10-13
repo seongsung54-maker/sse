@@ -276,12 +276,16 @@ async function 정보이미지확정({키, 제목, 블록들, 사진수, 사용�
 
   const 계획별제목 = new Map(계획.map((x) => [String(x.heading || "").trim(), x]));
   const 삽입 = new Map();
-  for (const x of 대상) {
-    const 계획한것 = 계획별제목.get(x.제목);
-    const 문구 = Array.isArray(계획한것?.lines) ? 계획한것.lines.map((v) => String(v).trim()).filter(Boolean).slice(0, 6) : [];
-    if (문구.length >= 4) 삽입.set(x.제목, {문구, 레이아웃: String(계획한것.layout || "clear Korean information graphic with a strong visual hierarchy")});
+  for (const [순번, x] of 대상.entries()) {
+    const 계획한것 = 계획별제목.get(x.제목) || 계획[순번] || {};
+    const 항목 = Array.isArray(계획한것.lines) ? 계획한것.lines.map((v) => String(v).trim()).filter(Boolean) : [];
+    const 본문항목 = (x.본문 || []).flatMap((p) => String(p).split(/(?<=[.!?])\s+/).map((v) => v.trim()).filter((v) => v.length > 4));
+    const 핵심 = 항목.filter((v) => v !== x.제목);
+    for (const v of 본문항목) if (핵심.length < 5 && !핵심.includes(v)) 핵심.push(v);
+    while (핵심.length < 3) 핵심.push("최신 공고 확인");
+    const 문구 = [x.제목, ...핵심.slice(0, 5)];
+    삽입.set(x.제목, {문구, 레이아웃: String(계획한것.layout || "clear Korean information graphic with a strong visual hierarchy")});
   }
-  if (!삽입.size) return 사진고르게(블록들 || []);
 
   const 결과 = [];
   let 현재제목 = "";
