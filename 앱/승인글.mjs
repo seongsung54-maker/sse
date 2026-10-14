@@ -28,6 +28,16 @@ const 결과폴더 = (작업폴더) => join(승인글폴더(작업폴더), "02_�
 
 const 기본수강코드 = ["weolbumakeitmiddle"];
 
+const 사이트별발행리듬 = Object.freeze({
+  1: {시작시각: "08:00", 간격분: 240},
+  2: {시작시각: "08:00", 간격분: 210},
+  3: {시작시각: "09:00", 간격분: 240},
+  4: {시작시각: "10:00", 간격분: 210},
+  5: {시작시각: "09:00", 간격분: 180},
+  6: {시작시각: "11:00", 간격분: 240},
+});
+function 발행리듬(사이트) { return 사이트별발행리듬[Number(사이트)] || {시작시각: "08:00", 간격분: 240}; }
+
 // ───────── 키설정.txt (수강생이 직접 채우는 파일) ─────────
 //
 // 채팅으로 하나씩 묻는 대신, 수강생이 이 파일에 네 가지(OpenAI 키·사이트 주소·관리자 아이디·앱 비밀번호)를 적어 채팅에 끌어다 놓으면 코덱스가 읽어 확인·저장한다 (2026-09-20 진현님 지시). 수강 코드는 채팅으로, 충전액은 없앰 (2026-09-21).
@@ -449,7 +459,7 @@ export async function 글만들기(옵션 = {}) {
   return 잠금으로({작업폴더: 옵션.작업폴더, 이름: `승인글-사이트${Number(옵션.사이트) || 1}`, 일: () => 글만들기본체(옵션)});
 }
 
-async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날짜모드 = "", 시작날짜 = "", 무작위일수 = 0, 시간간격 = 0, 하루개수 = 0, 최소간격시간 = 0}) {
+async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날짜모드 = "", 시작날짜 = "", 무작위일수 = 0, 시간간격 = 0, 하루개수 = 0, 최소간격시간 = 0, 시작시각 = "", 간격분 = 0}) {
   const 설정 = await 설정읽기(작업폴더);
   const 빠진 = [];
   if (!설정.수강코드) 빠진.push("수강 코드");
@@ -459,7 +469,14 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
   const 앞상태 = await 제목상태({작업폴더, 사이트});
   if (앞상태.남은수 === 0) return {결과: "제목 없음", ...앞상태};
 
-  const argv = [`--site=${사이트}`, `--limit=${개수}`];
+  const argv = ["--site=" + 사이트, "--limit=" + 개수];
+  const 리듬 = 발행리듬(사이트);
+  const 적용시작시각 = String(시작시각 || 리듬.시작시각);
+  const 적용간격분 = Math.max(1, Number(간격분 || 리듬.간격분) || 리듬.간격분);
+  if (!날짜모드 || 날짜모드 === "spread") {
+    argv.push("--slot-start-time=" + 적용시작시각);
+    argv.push("--slot-gap-minutes=" + 적용간격분);
+  }
   if (날짜모드) argv.push(`--date-mode=${날짜모드}`);
   if (하루개수) argv.push(`--per-day=${하루개수}`);
   if (최소간격시간) argv.push(`--min-gap-hours=${최소간격시간}`);
@@ -545,11 +562,13 @@ export async function 날짜재배치({작업폴더, 사이트 = 1, 하루개수
   const 대상 = 글들.filter((p) => p.status === "draft" || p.status === "pending" || p.status === "future");
   대상.sort((a, b) => a.id - b.id);
   const KST = 9 * 3600 * 1000;
-  const per = Math.max(1, 하루개수), gapMs = (Math.max(1, 최소간격시간) + 1) * 3600 * 1000;
+  const 리듬 = 발행리듬(사이트);
+  const [시, 분] = 리듬.시작시각.split(":").map(Number);
+  const per = Math.max(1, 하루개수), gapMs = 리듬.간격분 * 60 * 1000;
   const now = Date.now(), 최소 = now + 10 * 60 * 1000;
   const kstNow = new Date(now + KST);
   const dayStart = Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate()) - KST;
-  const slot = (day, k) => dayStart + day * 86400000 + 8 * 3600 * 1000 + k * gapMs;
+  const slot = (day, k) => dayStart + day * 86400000 + (시 * 60 + 분) * 60 * 1000 + k * gapMs;
   let skipped = 0;
   for (let k = 0; k < per; k += 1) if (slot(0, k) < 최소) skipped += 1;
   const 바뀜 = [];
