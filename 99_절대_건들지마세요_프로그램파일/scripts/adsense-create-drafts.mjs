@@ -485,21 +485,25 @@ function applyTimeOfDay(date, fixedTime) {
 // 슬롯 = 08:00(KST) + k × (최소간격+1)시간 + 0~60분 무작위 → 이웃 글 사이가 항상 최소간격 이상 벌어진다.
 // 오늘 이미 지나간 슬롯은 건너뛴다(지금+10분보다 앞이면 예약이 안 걸림). 날짜는 KST 기준.
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-function spreadDate(index, {perDay = 3, minGapHours = 3, startDate = null, 피할시각들 = []} = {}) {
+function spreadDate(index, {perDay = 3, minGapHours = 3, startDate = null, 피할시각들 = [], slotStartTime = "", slotGapMinutes = 0} = {}) {
   const per = Math.max(1, Math.floor(perDay));
-  const gapMs = (Math.max(1, minGapHours) + 1) * 60 * 60 * 1000;
+  const startMatch = /^(\d{1,2}):(\d{2})$/.exec(String(slotStartTime));
+  const startHour = startMatch ? Math.max(0, Math.min(23, Number(startMatch[1]))) : 8;
+  const startMinute = startMatch ? Math.max(0, Math.min(59, Number(startMatch[2]))) : 0;
+  const customGapMs = slotGapMinutes > 0 ? slotGapMinutes * 60 * 1000 : 0;
+  const gapMs = customGapMs || (Math.max(1, minGapHours) + 1) * 60 * 60 * 1000;
   const now = Date.now();
   const 최소 = now + 10 * 60 * 1000;
   // 기준 날(KST 자정, UTC 로는 전날 15:00)
   const kstNow = new Date((startDate ? startDate.getTime() : now) + KST_OFFSET_MS);
   const dayStartUtc = Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate()) - KST_OFFSET_MS;
-  const slotStart = (day, k) => dayStartUtc + day * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000 + k * gapMs;
+  const slotStart = (day, k) => dayStartUtc + day * 24 * 60 * 60 * 1000 + (startHour * 60 + startMinute) * 60 * 1000 + k * gapMs;
   // 오늘 이미 지난 슬롯 수만큼 앞으로 민다 (startDate 를 미래로 준 경우엔 0)
   let skipped = 0;
   for (let k = 0; k < per; k += 1) if (slotStart(0, k) < 최소) skipped += 1;
   // 워드프레스에 이미 잡혀 있는 시각(예약·임시글)과 최소 간격 안에 드는 슬롯은 건너뛴다.
   // 그래서 수강생 폴더 기록이 없어도, 글을 1개씩 따로 만들어도 하루 3개·3시간 간격이 지켜진다 (2026-09-21 실측: 10개가 전부 12시대에 몰림).
-  const 간격ms = Math.max(1, minGapHours) * 60 * 60 * 1000;
+  const 간격ms = customGapMs ? Math.max(60, slotGapMinutes - 59) * 60 * 1000 : Math.max(1, minGapHours) * 60 * 60 * 1000;
   const 겹침 = (t) => 피할시각들.some((x) => Math.abs(x - t) < 간격ms);
   let i = index + skipped;
   for (let 시도 = 0; 시도 < 400; 시도 += 1) {
@@ -515,11 +519,11 @@ function spreadDate(index, {perDay = 3, minGapHours = 3, startDate = null, 피�
   return new Date(slotStart(Math.floor(i / per), i % per)).toISOString();
 }
 
-function postDateForIndex(index, mode, startDate, {randomDays = 30, fixedTime = "", stepDays = 1, hourGap = 0, perDay = 3, minGapHours = 3, 피할시각들 = []} = {}) {
+function postDateForIndex(index, mode, startDate, {randomDays = 30, fixedTime = "", stepDays = 1, hourGap = 0, perDay = 3, minGapHours = 3, 피할시각들 = [], slotStartTime = "", slotGapMinutes = 0} = {}) {
   // 날짜를 아예 보내지 않으면 워드프레스가 지금 시각으로 저장한다 (--date-mode=now 로만).
   if (mode === "now" || mode === "none") return null;
   // 기본값: 하루 3개, 최소 3시간 간격, 시각 무작위, 이미 잡힌 시각은 피함
-  if (mode === "spread") return spreadDate(index, {perDay, minGapHours, startDate: startDate && startDate.getTime() > Date.now() ? startDate : null, 피할시각들});
+  if (mode === "spread") return spreadDate(index, {perDay, minGapHours, startDate: startDate && startDate.getTime() > Date.now() ? startDate : null, 피할시각들, slotStartTime, slotGapMinutes});
 
   // 시간 간격 모드 — 글마다 N시간씩 미룬다.
   //
@@ -1654,6 +1658,8 @@ const visibleOutputDir = join(
 const dateMode = argValue("date-mode", "spread"); // 기본: 하루 3개 · 최소 3시간 간격 · 무작위 시각 (예전 기본 now 는 --date-mode=now)
 const perDay = Math.max(1, Number(argValue("per-day", "3")) || 3);
 const minGapHours = Math.max(1, Number(argValue("min-gap-hours", "3")) || 3);
+const slotStartTime = argValue("slot-start-time", "");
+const slotGapMinutes = Math.max(0, Number(argValue("slot-gap-minutes", "0")) || 0);
 const randomDays = Number(argValue("random-days", "30")) || 30;
 // 시간은 기본적으로 무작위다. 굳이 고정하려면 --fixed-time=18:00 처럼 붙인다.
 const fixedTime = argValue("fixed-time", "");
@@ -1878,7 +1884,7 @@ for (let index = 0; index < titles.length; index += 1) {
     writeFileSync(localPath, htmlWithImage, "utf8");
     writeFileSync(visiblePath, htmlWithImage, "utf8");
 
-    const postDate = postDateForIndex(index + dateOffset, dateMode, startDate, {randomDays, fixedTime, stepDays, hourGap, perDay, minGapHours, 피할시각들: 잡힌시각들});
+    const postDate = postDateForIndex(index + dateOffset, dateMode, startDate, {randomDays, fixedTime, stepDays, hourGap, perDay, minGapHours, 피할시각들: 잡힌시각들, slotStartTime, slotGapMinutes});
     if (postDate) 잡힌시각들.push(Date.parse(postDate)); // 이번 실행에서 잡은 시각도 다음 글이 피하게
     let post = await createDraftPost({siteUrl, username, appPassword, title, html: htmlWithImage, date: postDate, meta, featuredMediaId: featuredMedia.id, selectedCategory});
     if (!postHasInlineImage(post, featuredMedia)) {
