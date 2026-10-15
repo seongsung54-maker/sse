@@ -1440,7 +1440,7 @@ function postHasInlineImage(post, media) {
   return content.includes(`wp-image-${media.id}`) || content.includes(`"id":${media.id}`);
 }
 
-async async function generateApprovalSummary({apiKey, model, title, keyword}) {
+async function generateApprovalSummary({apiKey, model, title, keyword}) {
   const requiredPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
   let lastLength = 0;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
