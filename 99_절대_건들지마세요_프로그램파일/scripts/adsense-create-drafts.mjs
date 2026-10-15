@@ -1488,7 +1488,7 @@ function applyApprovalSummary(html, summary) {
   return `${summaryParagraphBlock(summary)}\n\n${html.trim()}`;
 }
 
-function generateArticle({apiKey, model, title, minChars, 키워드 = ""}) {
+async function generateArticle({apiKey, model, title, minChars, 키워드 = ""}) {
   const systemPrompt = [
     "너는 애드센스 승인용 정보성 글을 작성하는 한국어 에디터다.",
     "허위 정보, 과장, 출처 없는 단정, 의료/법률/금융 확정 조언을 피한다.",
