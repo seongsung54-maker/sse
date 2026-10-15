@@ -274,7 +274,7 @@ function normalizeArticleHtml(rawHtml, title) {
   return html.trim();
 }
 
-function validateArticleHtml(html, title, {minChars = 0} = {}) {
+function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}) {
   if (/<h1\b/i.test(html)) throw new Error("본문에 h1 태그가 남아 있음");
   if (!/<!--\s*wp:/i.test(html)) throw new Error("본문에 Gutenberg 블록 주석이 없음");
   const firstH2 = html.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
@@ -282,6 +282,39 @@ function validateArticleHtml(html, title, {minChars = 0} = {}) {
   const firstH2Text = stripTags(firstH2[1]);
   if (comparableText(firstH2Text) === comparableText(title)) {
     throw new Error("제목과 첫 h2 소제목이 같음");
+  }
+
+  const keyword = normalizeSpaces(focusKeyword);
+  if (keyword) {
+    const firstParagraphIndex = html.search(/<p\b/i);
+    const firstHeadingIndex = html.search(/<h[23]\b/i);
+    if (firstParagraphIndex < 0 || (firstHeadingIndex >= 0 && firstParagraphIndex > firstHeadingIndex)) {
+      throw new Error("제목 바로 아래 첫 블록에 요약글 문단이 없음");
+    }
+    const firstParagraph = html.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+    const summary = stripTags(firstParagraph?.[1] || "").replace(/\s+/g, " ").trim();
+    const summaryLength = [...summary].length;
+    if (summaryLength < 140 || summaryLength > 160) {
+      throw new Error(`요약글 글자 수가 조건과 다름 (${summaryLength}자 / 140~160자)`);
+    }
+    if (!summary.includes(keyword)) throw new Error("요약글에 메인키워드가 없음");
+    if (!/[가-힣]/.test(summary)) throw new Error("요약글이 한국어 문장 형식이 아님");
+    if (!["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"].some((phrase) => summary.includes(phrase))) {
+      throw new Error("요약글에 친근한 작성 계기 표현이 없음");
+    }
+    const boldKeyword = [...html.matchAll(/<(?:strong|b)\b[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi)]
+      .some((match) => stripTags(match[1]).includes(keyword));
+    if (boldKeyword) throw new Error("메인키워드가 굵게 표시됨");
+  }
+  const headings = [...html.matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)]
+    .map((match) => stripTags(match[1]).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  if (headings.some((heading) => heading.includes("마무리"))) {
+    throw new Error("소제목에 마무리가 포함됨");
+  }
+  const finalHeading = headings.at(-1) || "";
+  if (!/(핵심|기억|포인트|정리)/.test(finalHeading)) {
+    throw new Error("마지막 소제목이 핵심 포인트를 한 줄로 정리하지 않음");
   }
 
   // ── 아래는 "조용히 망가진 글"을 잡기 위한 검사다.
@@ -1414,9 +1447,9 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = ""})
     "검색 의도에 맞는 실용적인 정보, 구체적인 체크리스트, 주의사항, 단계별 설명을 포함한다.",
     "출력은 워드프레스 블록편집기가 개별 블록으로 인식할 수 있는 Gutenberg-compatible HTML 본문만 작성한다.",
     "반드시 Gutenberg 블록 주석을 사용한다. 예: <!-- wp:heading -->, <!-- wp:paragraph -->, <!-- wp:list -->, <!-- wp:table -->.",
-    "h1은 절대 쓰지 않는다. 첫 본문 블록은 h2여야 한다.",
+    "h1은 절대 쓰지 않는다. 글 제목 바로 아래의 첫 본문 블록은 요약글 p이고, 그 다음 블록부터 h2를 쓴다.",
     "첫 h2 소제목은 글 제목과 같으면 안 된다. 제목을 복사하지 말고, 핵심 정리형 소제목으로 다르게 쓴다.",
-    "h2, h3, p, ul, ol, li, strong, figure/table 태그를 자연스럽게 사용한다.",
+    "h2, h3, p, ul, ol, li, figure/table 태그를 자연스럽게 사용한다. strong 또는 b 태그는 쓰지 않는다.",
     "코드블록, 마크다운, 설명문, JSON-LD, script, iframe은 출력하지 않는다.",
     "광고 클릭 유도 문구, 구매 강요 문구, 애드센스 정책 위반 가능 문구는 넣지 않는다.",
   ].join("\n");
@@ -1427,10 +1460,12 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = ""})
     키워드 ? `포커스 키워드: "${키워드}" — 첫 문단 안에 그대로 1회, h2 소제목 중 하나에 1회, 본문 곳곳에 자연스럽게 3~5회 포함한다. 억지로 반복하지 않는다.` : "",
     "요청:",
     "- 초보자가 실제로 이해하고 따라할 수 있게 작성",
-    "- 첫 문단은 검색자가 왜 이 글을 읽어야 하는지 자연스럽게 설명",
+    "- 글 제목 바로 아래 첫 블록은 p 요약글로 작성한다. 공백 포함 140~160자의 한국어 한 문단이며, 한국인이 직접 겪은 경험을 섞어 이 글을 쓰는 이유와 다룰 내용을 소개한다.",
+    키워드 ? `- 요약글에 포커스 키워드 "${키워드}"를 정확히 1회 이상 포함한다.` : "- 요약글에 제목의 핵심 키워드를 1회 이상 포함한다.",
+    "- 요약글에는 왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나 이상의 친근한 표현을 자연스럽게 포함한다.",
     "- 중간에 체크리스트 또는 단계별 절차 포함",
-    "- 마지막은 요약과 주의사항으로 마무리",
-    "- 제목과 요약글은 사람이 나중에 직접 다듬을 예정이므로 본문만 출력",
+    "- 본문을 정리하는 마지막 소제목에는 마무리라는 말을 쓰지 않는다. 독자가 기억할 핵심 포인트를 한 줄로 나타낸 소제목을 쓴다.",
+    "- 제목은 출력하지 않고, 요약글부터 본문으로 출력",
     "- 첫 h2는 제목과 다른 문구로 작성",
     "- 본문 전체를 워드프레스 블록 주석으로 감싼 HTML로 출력",
     "- 표가 필요하면 아래 모양을 그대로 따라 쓸 것. 마크다운 표(| 로 그린 표)는 쓰지 말 것:",
@@ -1482,7 +1517,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = ""})
   const html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   // 분량은 여기서 실패시키지 않는다. 짧으면 호출한 쪽이 이어 써서 채운다 (2026-09-21 진현님: 짧다고 임시글을 안 만드는 일은 없어야 한다)
-  validateArticleHtml(html, title, {minChars: 0});
+  validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
   const 글자수 = stripTags(html).replace(/\s/g, "").length;
   return {html, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
 }
@@ -1852,7 +1887,7 @@ for (let index = 0; index < titles.length; index += 1) {
       try {
         const 더 = await extendArticle({apiKey: env.OPENAI_API_KEY, model, title, html, 부족자수: minChars - 현재});
         const 합침 = `${html.trim()}\n\n${더.추가}`;
-        validateArticleHtml(합침, title, {minChars: 0}); // 표·끊긴 태그 검사만 (분량은 따지지 않는다)
+        validateArticleHtml(합침, title, {minChars: 0, focusKeyword: meta.focusKeyword}); // 표·끊긴 태그 검사만 (분량은 따지지 않는다)
         html = 합침;
         articleUsage = mergeUsage(articleUsage, 더.usage);
         짧음 = stripTags(html).replace(/\s/g, "").length < minChars;
@@ -1877,7 +1912,7 @@ for (let index = 0; index < titles.length; index += 1) {
     단계(index + 1, titles.length, "워드프레스에 올리는 중");
     const featuredMedia = await uploadFeaturedImage({siteUrl, username, appPassword, title, meta, generatedImage});
     const htmlWithImage = insertImageBlockIntoArticle(html, buildArticleImageBlock({media: featuredMedia}));
-    validateArticleHtml(htmlWithImage, title);
+    validateArticleHtml(htmlWithImage, title, {focusKeyword: meta.focusKeyword});
     validateInlineImageBlock(htmlWithImage, featuredMedia);
     const localPath = join(outputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
     const visiblePath = join(visibleOutputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
