@@ -1440,7 +1440,55 @@ function postHasInlineImage(post, media) {
   return content.includes(`wp-image-${media.id}`) || content.includes(`"id":${media.id}`);
 }
 
-async function generateArticle({apiKey, model, title, minChars, 키워드 = ""}) {
+async async function generateApprovalSummary({apiKey, model, title, keyword}) {
+  const requiredPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
+  let lastLength = 0;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const response = await fetch(openAiResponsesUrl(), {
+      method: "POST",
+      headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
+      body: JSON.stringify({
+        model,
+        input: [
+          {role: "system", content: "너는 한국어 블로그 요약글만 작성한다. 설명, 제목, HTML, 따옴표, 마크다운 없이 요약글 한 문단만 출력한다."},
+          {role: "user", content: [
+            `글 제목: ${title}`,
+            `메인키워드: ${keyword}`,
+            "공백 포함 정확히 140~160자의 한국어 요약글을 작성한다.",
+            "한국인이 직접 겪은 경험을 한 번 넣고, 이 글을 쓰는 이유와 다룰 내용을 소개한다.",
+            `메인키워드 "${keyword}"를 문장 안에 1회 이상 그대로 넣는다.`,
+            "왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나를 자연스럽게 포함한다.",
+          ].join("\n")},
+        ],
+        max_output_tokens: 300,
+      }),
+    });
+    const body = await response.text();
+    let data;
+    try { data = JSON.parse(body); } catch { throw new Error(`OpenAI 응답을 해석하지 못함: ${body.slice(0, 200)}`); }
+    if (!response.ok) throw new Error(`OpenAI API 실패: ${data.error?.message || body.slice(0, 300)}`);
+    const summary = stripTags(extractOutputText(data)).replace(/[“”"'`]/g, "").replace(/\s+/g, " ").trim();
+    lastLength = [...summary].length;
+    const valid = lastLength >= 140 && lastLength <= 160 &&
+      summary.includes(keyword) &&
+      /[가-힣]/.test(summary) &&
+      requiredPhrases.some((phrase) => summary.includes(phrase));
+    if (valid) return {summary, usage: extractUsage(data)};
+  }
+  throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
+}
+
+function summaryParagraphBlock(summary) {
+  return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
+}
+
+function applyApprovalSummary(html, summary) {
+  const openingParagraph = /^\s*<!--\s*wp:paragraph\s*-->\s*<p\b[^>]*>[\s\S]*?<\/p>\s*<!--\s*\/wp:paragraph\s*-->/i;
+  if (openingParagraph.test(html)) return html.replace(openingParagraph, summaryParagraphBlock(summary));
+  return `${summaryParagraphBlock(summary)}\n\n${html.trim()}`;
+}
+
+function generateArticle({apiKey, model, title, minChars, 키워드 = ""}) {
   const systemPrompt = [
     "너는 애드센스 승인용 정보성 글을 작성하는 한국어 에디터다.",
     "허위 정보, 과장, 출처 없는 단정, 의료/법률/금융 확정 조언을 피한다.",
@@ -1514,10 +1562,16 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = ""})
     throw error;
   }
 
-  const html = normalizeArticleHtml(extractOutputText(data), title);
+  let html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
-  // 분량은 여기서 실패시키지 않는다. 짧으면 호출한 쪽이 이어 써서 채운다 (2026-09-21 진현님: 짧다고 임시글을 안 만드는 일은 없어야 한다)
-  validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+  if (키워드) {
+    const summaryMade = await generateApprovalSummary({apiKey, model, title, keyword: 키워드});
+    html = applyApprovalSummary(html, summaryMade.summary);
+    validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+    const 글자수 = stripTags(html).replace(/\s/g, "").length;
+    return {html, usage: mergeUsage(extractUsage(data), summaryMade.usage), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
+  }
+  validateArticleHtml(html, title, {minChars: 0});
   const 글자수 = stripTags(html).replace(/\s/g, "").length;
   return {html, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
 }
