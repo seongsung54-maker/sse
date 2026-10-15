@@ -1478,24 +1478,46 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
   throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
 }
 
+function everydayHookForTitle(title) {
+  const text = normalizeSpaces(title).toLowerCase();
+  const hooks = [
+    [["유리"], "창문 너머를 보거나 유리컵에 물을 따를 때"],
+    [["도자기", "그릇"], "밥그릇이나 찻잔을 사용할 때"],
+    [["전화", "통신", "전신"], "가족이나 친구에게 전화를 걸 때"],
+    [["전기조명", "조명", "전구"], "해가 진 뒤 집 안의 불을 켤 때"],
+    [["다리미", "의생활"], "옷을 다리거나 외출 준비를 할 때"],
+    [["철", "금속"], "냄비를 쓰거나 문손잡이를 잡을 때"],
+    [["인쇄", "독서"], "책이나 안내문을 읽을 때"],
+    [["무선", "방송"], "휴대폰으로 소식을 확인할 때"],
+    [["별자리", "별"], "밤하늘의 별을 바라볼 때"],
+    [["농업", "센서", "토양"], "마트에서 채소와 과일을 고를 때"],
+    [["군중", "사람"], "출퇴근길이나 공연장에 많은 사람이 모일 때"],
+    [["외래 생물", "생물"], "공원이나 하천에서 낯선 식물과 물고기를 볼 때"],
+    [["철도", "기차"], "기차역에서 열차를 기다리거나 여행을 준비할 때"],
+  ];
+  const found = hooks.find(([tokens]) => tokens.some((token) => text.includes(token)));
+  return found ? found[1] : "매일 사용하는 물건을 바라볼 때";
+}
+
 function buildCompliantApprovalSummary({title, keyword}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
+  const hook = everydayHookForTitle(title);
   const suffixes = [
-    " 제가 확인하며 알게 된 점도 함께 담겠습니다.",
-    " 처음 읽는 분도 이해하기 쉽게 풀어보겠습니다.",
-    " 실제 사례를 중심으로 차근차근 살펴보겠습니다.",
+    " 익숙한 생활과 연결해 쉽게 살펴보겠습니다.",
+    " 처음 접하는 분도 이해하기 쉽게 풀어보겠습니다.",
+    " 실제 사례를 중심으로 차근차근 알아보겠습니다.",
   ];
   const openingTemplates = [
-    (topic) => `평소 ${keyword} 관련 자료를 정리하다가 ${topic}을 다시 살펴보게 됐습니다. 처음에는 낯설었지만 왜 중요한지 궁금해졌습니다. 이 글에서는 ${keyword}의 배경과 핵심 흐름, 실제 사례를 어떻게 이해하면 좋은지 차근차근 정리해 보려 합니다.`,
-    (topic) => `최근 ${keyword}에 관한 궁금증이 생겨 ${topic}을 찾아보게 됐습니다. 자료를 읽을수록 왜 알아둘 만한지 느꼈습니다. 이 글에서는 ${keyword}의 의미와 변화 과정, 생활 속에서 어떻게 받아들이면 좋은지 정리해 보려 합니다.`,
-    (topic) => `주말에 ${keyword} 관련 내용을 읽다가 ${topic}이 눈에 들어왔습니다. 막연했던 내용이 실제 사례와 이어져 이유는 무엇인지 더 궁금해졌습니다. 이 글에서는 ${keyword}의 핵심과 이해에 도움이 되는 흐름을 차분히 살펴보려 합니다.`,
-    (topic) => `일상에서 ${keyword} 이야기를 접한 뒤 ${topic}을 직접 찾아보게 됐습니다. 처음 접하는 분은 어떻게 이해할까요? 이 글에서는 ${keyword}의 배경과 중요한 변화, 알아두면 좋은 점을 쉽게 정리해 보려 합니다.`,
-    (topic) => `자료를 정리하던 중 ${keyword}와 ${topic}의 연결이 궁금해졌습니다. 이러한 경우에는 배경부터 살펴보는 것이 도움이 됩니다. 이 글에서는 ${keyword}의 흐름과 사례를 통해 핵심 내용을 알기 쉽게 소개해 보려 합니다.`,
+    (topic) => `${hook}, 이것이 처음 어떻게 만들어졌는지 궁금했던 적 있으신가요? ${keyword}가 없었다면 지금의 생활도 많이 달라졌을지 모릅니다. 이 글에서는 ${topic}을 통해 ${keyword}의 원리와 만들어진 배경을 쉬운 말로 살펴보려 합니다.`,
+    (topic) => `${hook}, 익숙한 모습 뒤에 어떤 변화가 있었는지 생각해 본 적 있으신가요? ${keyword}의 흐름을 알면 ${topic}도 다르게 보입니다. 이 글에서는 왜 이런 기술이 필요했는지와 핵심 원리를 생활 속 사례와 함께 정리해 보려 합니다.`,
+    (topic) => `${hook}, 당연하게 여기던 장면이 오래전에는 쉽지 않았을 수 있습니다. ${keyword}는 어떻게 지금처럼 우리 곁에 자리 잡았을까요? 이 글에서는 ${topic}과 연결해 배경과 중요한 변화를 알기 쉽게 소개해 보려 합니다.`,
+    (topic) => `${hook}, 평소에는 지나치기 쉬운 일이지만 그 시작을 알면 새롭게 보이기도 합니다. ${keyword}가 왜 중요한지 궁금하다면 ${topic}을 함께 살펴볼까요? 이 글에서는 핵심 원리와 생활에 미친 변화를 차분히 정리해 보려 합니다.`,
+    (topic) => `${hook}, 이런 경험은 없으셨나요? 익숙한 물건이나 장면도 만들어진 과정을 알면 더 흥미로워집니다. 이 글에서는 ${keyword}와 ${topic}의 관계를 통해 어떻게 변화가 이어졌는지 쉽게 알아보려 합니다.`,
   ];
   const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
   for (let offset = 0; offset < openingTemplates.length; offset += 1) {
     const opening = openingTemplates[(seed + offset) % openingTemplates.length];
-    for (let size = Math.min(36, cleanedTitle.length); size >= 8; size -= 1) {
+    for (let size = Math.min(30, cleanedTitle.length); size >= 8; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
       let summary = opening(topic);
       for (const suffix of suffixes) {
