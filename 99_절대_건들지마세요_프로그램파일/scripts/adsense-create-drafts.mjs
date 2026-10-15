@@ -1485,14 +1485,25 @@ function buildCompliantApprovalSummary({title, keyword}) {
     " 처음 읽는 분도 이해하기 쉽게 풀어보겠습니다.",
     " 실제 사례를 중심으로 차근차근 살펴보겠습니다.",
   ];
-  for (let size = Math.min(36, cleanedTitle.length); size >= 8; size -= 1) {
-    const topic = cleanedTitle.slice(0, size).trim();
-    let summary = `며칠 전 ${keyword} 관련 내용을 찾아보다가 ${topic}을 직접 확인하게 됐습니다. 처음에는 낯설었지만 왜 중요한지 궁금해졌습니다. 이 글에서는 ${keyword}의 배경과 핵심 흐름, 실제 사례를 어떻게 이해하면 좋은지 차근차근 정리해 보려 합니다.`;
-    for (const suffix of suffixes) {
-      if ([...summary].length >= 140) break;
-      if ([...summary + suffix].length <= 160) summary += suffix;
+  const openingTemplates = [
+    (topic) => `평소 ${keyword} 관련 자료를 정리하다가 ${topic}을 다시 살펴보게 됐습니다. 처음에는 낯설었지만 왜 중요한지 궁금해졌습니다. 이 글에서는 ${keyword}의 배경과 핵심 흐름, 실제 사례를 어떻게 이해하면 좋은지 차근차근 정리해 보려 합니다.`,
+    (topic) => `최근 ${keyword}에 관한 궁금증이 생겨 ${topic}을 찾아보게 됐습니다. 자료를 읽을수록 왜 알아둘 만한지 느꼈습니다. 이 글에서는 ${keyword}의 의미와 변화 과정, 생활 속에서 어떻게 받아들이면 좋은지 정리해 보려 합니다.`,
+    (topic) => `주말에 ${keyword} 관련 내용을 읽다가 ${topic}이 눈에 들어왔습니다. 막연했던 내용이 실제 사례와 이어져 이유는 무엇인지 더 궁금해졌습니다. 이 글에서는 ${keyword}의 핵심과 이해에 도움이 되는 흐름을 차분히 살펴보려 합니다.`,
+    (topic) => `일상에서 ${keyword} 이야기를 접한 뒤 ${topic}을 직접 찾아보게 됐습니다. 처음 접하는 분은 어떻게 이해할까요? 이 글에서는 ${keyword}의 배경과 중요한 변화, 알아두면 좋은 점을 쉽게 정리해 보려 합니다.`,
+    (topic) => `자료를 정리하던 중 ${keyword}와 ${topic}의 연결이 궁금해졌습니다. 이러한 경우에는 배경부터 살펴보는 것이 도움이 됩니다. 이 글에서는 ${keyword}의 흐름과 사례를 통해 핵심 내용을 알기 쉽게 소개해 보려 합니다.`,
+  ];
+  const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
+  for (let offset = 0; offset < openingTemplates.length; offset += 1) {
+    const opening = openingTemplates[(seed + offset) % openingTemplates.length];
+    for (let size = Math.min(36, cleanedTitle.length); size >= 8; size -= 1) {
+      const topic = cleanedTitle.slice(0, size).trim();
+      let summary = opening(topic);
+      for (const suffix of suffixes) {
+        if ([...summary].length >= 140) break;
+        if ([...summary + suffix].length <= 160) summary += suffix;
+      }
+      if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
     }
-    if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
   }
   throw new Error("조건에 맞는 요약글을 만들지 못함");
 }
