@@ -1478,6 +1478,25 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
   throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
 }
 
+function buildCompliantApprovalSummary({title, keyword}) {
+  const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
+  const suffixes = [
+    " 제가 확인하며 알게 된 점도 함께 담겠습니다.",
+    " 처음 읽는 분도 이해하기 쉽게 풀어보겠습니다.",
+    " 실제 사례를 중심으로 차근차근 살펴보겠습니다.",
+  ];
+  for (let size = Math.min(36, cleanedTitle.length); size >= 8; size -= 1) {
+    const topic = cleanedTitle.slice(0, size).trim();
+    let summary = `며칠 전 ${keyword} 관련 내용을 찾아보다가 ${topic}을 직접 확인하게 됐습니다. 처음에는 낯설었지만 왜 중요한지 궁금해졌습니다. 이 글에서는 ${keyword}의 배경과 핵심 흐름, 실제 사례를 어떻게 이해하면 좋은지 차근차근 정리해 보려 합니다.`;
+    for (const suffix of suffixes) {
+      if ([...summary].length >= 140) break;
+      if ([...summary + suffix].length <= 160) summary += suffix;
+    }
+    if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
+  }
+  throw new Error("조건에 맞는 요약글을 만들지 못함");
+}
+
 function summaryParagraphBlock(summary) {
   return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
 }
@@ -1565,11 +1584,11 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = ""})
   let html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   if (키워드) {
-    const summaryMade = await generateApprovalSummary({apiKey, model, title, keyword: 키워드});
-    html = applyApprovalSummary(html, summaryMade.summary);
+    const summary = buildCompliantApprovalSummary({title, keyword: 키워드});
+    html = applyApprovalSummary(html, summary);
     validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
-    return {html, usage: mergeUsage(extractUsage(data), summaryMade.usage), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
+    return {html, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
   }
   validateArticleHtml(html, title, {minChars: 0});
   const 글자수 = stripTags(html).replace(/\s/g, "").length;
