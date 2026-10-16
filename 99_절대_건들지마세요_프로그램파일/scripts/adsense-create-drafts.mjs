@@ -1490,48 +1490,83 @@ function summaryPlanForSite(site) {
   return plans[Number(site)] || {reader: "관련 정보를 처음 확인하는 독자", outcome: "핵심을 이해하는 데 필요한 관점"};
 }
 
-function site4SituationForTitle(title) {
+function situationForTitle(title, site) {
   const text = normalizeSpaces(title).toLowerCase();
-  if (text.includes("회의") || text.includes("아이디어")) return "회의에서 먼저 나온 의견이 뒤의 생각까지 흔드는 경험은 누구에게나 있을 수 있습니다.";
-  if (text.includes("운영진") || text.includes("회원 의견")) return "운영진끼리 결론을 서두르다 보면 조용한 회원의 의견이 빠지는 순간이 생길 수 있습니다.";
-  if (text.includes("육아용품") || text.includes("가정")) return "다른 가정이 많이 고른 육아용품을 보면 나도 같은 선택이 더 안전해 보일 수 있습니다.";
-  if (text.includes("규범") || text.includes("상황")) return "같은 사람도 모임의 분위기와 상황이 달라지면 평소와 다른 기준을 따르곤 합니다.";
-  if (text.includes("아파트") || text.includes("주민")) return "같은 아파트 동에 산다는 이유만으로 낯선 이웃에게도 더 친밀감을 느끼는 경우가 있습니다.";
-  return compactKoreanPhrase(title) + "과 관련된 상황에서는 주변의 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.";
+  const situations = {
+    1: [
+      [["유리"], "창문 너머를 보거나 유리컵을 사용할 때에는 투명한 재료가 당연하게 느껴집니다."],
+      [["도자기", "그릇"], "밥그릇이나 찻잔을 사용할 때에는 단단한 그릇이 만들어진 과정을 떠올리기 어렵습니다."],
+      [["전화", "통신", "전신"], "누군가에게 바로 연락할 수 있는 일은 익숙하지만 통신 기술에는 긴 변화의 시간이 담겨 있습니다."],
+      [["전구", "조명"], "해가 진 뒤 불을 켜는 짧은 순간에도 조명 기술이 바꾼 생활의 모습이 담겨 있습니다."],
+      [["주판", "계산"], "금액을 계산하거나 숫자를 정리할 때에는 계산 도구가 어떻게 달라졌는지 생각해 볼 수 있습니다."],
+      [["도르래", "크랭크", "기계"], "엘리베이터와 자전거처럼 힘과 움직임이 바뀌는 장면에는 기계 장치의 원리가 숨어 있습니다."],
+      [["가전"], "세탁기나 청소기로 집안일을 할 때에는 생활을 바꾼 발명품의 역할을 확인할 수 있습니다."],
+    ],
+    2: [
+      [["망원경"], "망원경으로 별자리를 찾을 때에는 넓은 하늘에서 어느 범위를 먼저 볼지 막막할 수 있습니다."],
+      [["날씨", "관측 조건"], "별을 보려는 날에는 날씨와 시야가 관측 결과를 크게 바꿀 수 있습니다."],
+      [["붉은 조명"], "어두운 곳에서 별을 관측할 때에는 눈이 어둠에 적응한 상태를 지키는 일이 중요합니다."],
+      [["북쪽", "여름"], "계절에 따라 달라지는 북쪽 하늘을 보면 같은 별자리도 전혀 다르게 느껴질 수 있습니다."],
+      [["사진", "비교"], "같은 하늘을 다른 계절에 찍은 사진을 비교하면 별자리의 위치 변화를 더 분명히 볼 수 있습니다."],
+    ],
+    3: [
+      [["전기전도도"], "양액이나 관수용 물의 수치를 비교할 때에는 숫자 하나만 보고 재배 환경을 판단하기 어렵습니다."],
+      [["기준선", "그래프"], "재배 기록 그래프에 기준선을 표시하면 평소와 다른 변화를 더 빨리 알아차릴 수 있습니다."],
+      [["비가", "토양 수분"], "비가 그친 뒤에는 토양이 젖어 보여도 실제 수분 변화는 시간에 따라 달라질 수 있습니다."],
+      [["자연광", "조명"], "해가 짧거나 흐린 날에는 자연광 부족 시간을 확인해 보조 조명을 조절할 필요가 있습니다."],
+      [["오래된", "기록"], "지난 재배 기록과 새 측정값을 비교할 때에는 측정 조건이 같은지부터 확인해야 합니다."],
+    ],
+    4: [
+      [["회의", "아이디어"], "회의에서 먼저 나온 의견이 뒤의 생각까지 흔드는 경험은 누구에게나 있을 수 있습니다."],
+      [["운영진", "회원"], "운영진끼리 결론을 서두르다 보면 조용한 회원의 의견이 빠지는 순간이 생길 수 있습니다."],
+      [["육아용품", "가정"], "다른 가정이 많이 고른 육아용품을 보면 나도 같은 선택이 더 안전해 보일 수 있습니다."],
+      [["규범", "상황"], "같은 사람도 모임의 분위기와 상황이 달라지면 평소와 다른 기준을 따르곤 합니다."],
+      [["아파트", "주민"], "같은 아파트 동에 산다는 이유만으로 낯선 이웃에게도 더 친밀감을 느끼는 경우가 있습니다."],
+    ],
+    5: [
+      [["뉴스"], "뉴스에서 외래생물을 접하면 위험하다는 인상만 먼저 남기기 쉽습니다."],
+      [["하천", "공원"], "하천과 공원에서 낯선 생물을 발견하면 우리 주변 생태계와 어떤 관계인지 궁금해집니다."],
+      [["반려", "유기"], "반려동물이나 식물이 자연으로 들어가는 문제는 일상 선택과 생태계 변화를 함께 생각하게 합니다."],
+      [["생태계", "확산"], "한 종의 확산은 다른 생물과 서식 환경에 예상보다 넓은 영향을 남길 수 있습니다."],
+    ],
+    6: [
+      [["역", "환승"], "낯선 도시를 여행할 때에는 역의 동선과 환승 방식이 첫인상을 크게 바꿀 수 있습니다."],
+      [["자전거"], "덴마크의 철도시설을 볼 때에는 자전거 이동과 열차 이용이 어떻게 이어지는지 눈여겨볼 만합니다."],
+      [["건축", "디자인"], "역 건축과 안내 디자인을 살펴보면 한 도시가 이동하는 사람을 배려하는 방식을 알 수 있습니다."],
+      [["도시", "연결"], "철도는 도시와 도시를 잇는 수단을 넘어 생활권을 연결하는 공간이 되기도 합니다."],
+    ],
+  };
+  const found = (situations[Number(site)] || []).find(([tokens]) => tokens.every((token) => text.includes(token)));
+  if (found) return found[1];
+  const topic = compactKoreanPhrase(title);
+  const fallback = {
+    1: topic + "을 살펴보면 오늘의 생활 속 물건에도 발명의 역사가 남아 있음을 발견하게 됩니다.",
+    2: topic + "을 관측할 때에는 계절과 시간, 하늘 상태를 함께 확인할 필요가 있습니다.",
+    3: topic + "을 확인할 때에는 한 번의 수치보다 기록과 측정 조건을 함께 봐야 합니다.",
+    4: topic + "과 관련된 상황에서는 주변의 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.",
+    5: topic + "을 살펴보면 외래생물이 생활과 생태계에 어떻게 연결되는지 생각해 볼 수 있습니다.",
+    6: topic + "을 보면 덴마크의 철도시설이 여행과 도시 생활에 어떤 역할을 하는지 알 수 있습니다.",
+  };
+  return fallback[Number(site)] || topic + "을 이해하려면 실제 상황과 핵심 내용을 함께 살펴볼 필요가 있습니다.";
 }
 
 function buildCompliantApprovalSummary({title, keyword, site = 0}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
   const plan = summaryPlanForSite(site);
+  const situation = situationForTitle(title, site);
   const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
-  const suffixes = [
-    " 처음 접하는 분도 흐름을 따라갈 수 있게 풀어보겠습니다.",
-    " 실제 상황에 적용할 수 있도록 차근차근 정리해 보겠습니다.",
-    " 필요한 판단 기준을 쉬운 말로 살펴보겠습니다.",
+  const templates = [
+    (topic) => situation + " " + keyword + "와 관련된 " + topic + "에서는 무엇을 먼저 이해하면 좋을까요? 이 글에서는 " + plan.reader + "가 " + plan.outcome + "을 얻도록 핵심을 정리합니다.",
+    (topic) => situation + " " + topic + "을 이해하면 지금의 선택과 장면을 다른 관점에서 볼 수 있습니다. " + keyword + "는 어떤 이유로 중요하며, 실제로 어떻게 살펴봐야 할까요? 이 글에서 " + plan.outcome + "을 알아봅니다.",
+    (topic) => situation + " 이때 " + keyword + "를 알면 막연한 궁금증을 실제 판단과 관찰로 이어 갈 수 있습니다. " + topic + "을 통해 " + plan.reader + "에게 필요한 " + plan.outcome + "을 살펴보겠습니다.",
   ];
-  const site4Templates = [
-    (topic) => site4SituationForTitle(title) + " " + keyword + "는 왜 이런 반응을 만들고, " + topic + "에서는 무엇을 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 얻을 수 있도록 핵심을 정리합니다.",
-    (topic) => site4SituationForTitle(title) + " " + topic + "를 이해하면 내 선택이 주변의 영향을 받은 순간을 돌아볼 수 있습니다. " + keyword + "의 작동 방식을 통해 " + plan.outcome + "을 차분히 살펴보겠습니다.",
-    (topic) => site4SituationForTitle(title) + " 이때 " + keyword + "를 알면 나만 이상한 반응을 한 것이 아니라는 점을 이해할 수 있습니다. " + topic + "을 통해 " + plan.outcome + "을 정리해 보겠습니다.",
-  ];
-  const siteTemplates = {
-    1: [(topic) => "평소 사용하는 물건과 기술에도 오랜 시간에 걸친 발명의 흔적이 남아 있습니다. " + topic + "은 오늘의 생활과 어떻게 이어졌을까요? " + keyword + "를 통해 " + plan.reader + "가 " + plan.outcome + "을 얻을 수 있도록 살펴보겠습니다."],
-    2: [(topic) => "별자리를 찾으러 나갔을 때 방향과 시간, 날씨 때문에 예상보다 어려움을 겪을 수 있습니다. " + topic + "을 관측할 때 무엇부터 확인해야 할까요? " + keyword + "를 통해 " + plan.outcome + "을 차근차근 살펴보겠습니다."],
-    3: [(topic) => "재배 현장의 수치는 한 번의 값만으로 결론내리기보다 기록과 측정 조건을 함께 살펴야 합니다. " + topic + "에서 " + keyword + "를 어떻게 읽어야 할까요? " + plan.reader + "이 " + plan.outcome + "을 얻도록 설명합니다."],
-    5: [(topic) => "뉴스에서 본 외래생물은 문제로만 느껴지기 쉽지만, 실제로는 우리 주변 환경과 생활에 여러 방식으로 연결돼 있습니다. " + topic + "을 통해 " + keyword + "를 어떤 시선으로 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 정리합니다."],
-    6: [(topic) => "덴마크를 여행하거나 건축과 디자인을 살펴볼 때 철도시설은 단순한 이동수단 이상으로 보일 수 있습니다. " + topic + "은 어떤 특징을 보여 줄까요? " + keyword + "를 통해 " + plan.outcome + "을 알아보겠습니다."],
-  };
-  const templates = Number(site) === 4 ? site4Templates : siteTemplates[Number(site)] || [(topic) => topic + "을 이해하려면 " + keyword + "의 핵심과 실제 적용 장면을 함께 살펴볼 필요가 있습니다. " + plan.reader + "가 무엇을 확인하면 좋을까요? 이 글에서는 " + plan.outcome + "을 중심으로 정리합니다."];
+  const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
     const opening = templates[(seed + offset) % templates.length];
     for (let size = Math.min(42, cleanedTitle.length); size >= 10; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
-      let summary = opening(topic);
-      for (const suffix of suffixes) {
-        if ([...summary].length >= 140) break;
-        if ([...summary + suffix].length <= 160) summary += suffix;
-      }
-      if (/출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/.test(summary)) throw new Error("제목과 무관하거나 반복된 고정 도입문이 요약글에 포함됨");
+      const summary = opening(topic);
+      if (blocked.test(summary)) throw new Error("제목과 무관하거나 반복된 고정 도입문이 요약글에 포함됨");
       if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
     }
   }
