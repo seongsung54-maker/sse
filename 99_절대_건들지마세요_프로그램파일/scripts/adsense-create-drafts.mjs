@@ -1488,7 +1488,10 @@ function everydayHookForTitle(title) {
     [["다리미", "의생활"], "옷을 다리거나 외출 준비를 할 때"],
     [["철", "금속"], "냄비를 쓰거나 문손잡이를 잡을 때"],
     [["인쇄", "독서"], "책이나 안내문을 읽을 때"],
-    [["무선", "방송"], "휴대폰으로 소식을 확인할 때"],
+    [["무선", "방송", "진공관"], "휴대폰으로 소식을 확인하거나 라디오를 들을 때"],
+    [["주판", "계산"], "금액을 계산하거나 숫자를 정리할 때"],
+    [["도르래", "크랭크", "기계"], "엘리베이터나 자전거처럼 힘과 움직임이 바뀌는 장면을 볼 때"],
+    [["생활가전", "가전"], "세탁기나 청소기로 집안일을 할 때"],
     [["별자리", "별"], "밤하늘의 별을 바라볼 때"],
     [["농업", "센서", "토양"], "마트에서 채소와 과일을 고를 때"],
     [["군중", "사람"], "출퇴근길이나 공연장에 많은 사람이 모일 때"],
@@ -1496,28 +1499,34 @@ function everydayHookForTitle(title) {
     [["철도", "기차"], "기차역에서 열차를 기다리거나 여행을 준비할 때"],
   ];
   const found = hooks.find(([tokens]) => tokens.some((token) => text.includes(token)));
-  return found ? found[1] : "매일 사용하는 물건을 바라볼 때";
+  return found ? found[1] : compactKoreanPhrase(title) + "과 관련된 물건이나 장면을 마주할 때";
 }
 
 function buildCompliantApprovalSummary({title, keyword}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
   const hook = everydayHookForTitle(title);
   const suffixes = [
-    " 익숙한 생활과 연결해 쉽게 살펴보겠습니다.",
+    " 핵심을 일상과 연결해 쉽게 살펴보겠습니다.",
     " 처음 접하는 분도 이해하기 쉽게 풀어보겠습니다.",
-    " 실제 사례를 중심으로 차근차근 알아보겠습니다.",
+    " 실제 생활에서 어떤 의미가 있는지 차근차근 알아보겠습니다.",
   ];
-  const openingTemplates = [
-    (topic) => `${hook}, 이것이 처음 어떻게 만들어졌는지 궁금했던 적 있으신가요? ${keyword}가 없었다면 지금의 생활도 많이 달라졌을지 모릅니다. 이 글에서는 ${topic}을 통해 ${keyword}의 원리와 만들어진 배경을 쉬운 말로 살펴보려 합니다.`,
-    (topic) => `${hook}, 익숙한 모습 뒤에 어떤 변화가 있었는지 생각해 본 적 있으신가요? ${keyword}의 흐름을 알면 ${topic}도 다르게 보입니다. 이 글에서는 왜 이런 기술이 필요했는지와 핵심 원리를 생활 속 사례와 함께 정리해 보려 합니다.`,
-    (topic) => `${hook}, 당연하게 여기던 장면이 오래전에는 쉽지 않았을 수 있습니다. ${keyword}는 어떻게 지금처럼 우리 곁에 자리 잡았을까요? 이 글에서는 ${topic}과 연결해 배경과 중요한 변화를 알기 쉽게 소개해 보려 합니다.`,
-    (topic) => `${hook}, 평소에는 지나치기 쉬운 일이지만 그 시작을 알면 새롭게 보이기도 합니다. ${keyword}가 왜 중요한지 궁금하다면 ${topic}을 함께 살펴볼까요? 이 글에서는 핵심 원리와 생활에 미친 변화를 차분히 정리해 보려 합니다.`,
-    (topic) => `${hook}, 이런 경험은 없으셨나요? 익숙한 물건이나 장면도 만들어진 과정을 알면 더 흥미로워집니다. 이 글에서는 ${keyword}와 ${topic}의 관계를 통해 어떻게 변화가 이어졌는지 쉽게 알아보려 합니다.`,
+  const dailyTemplates = [
+    (topic) => hook + ", 지금은 자연스러운 이 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 그 배경과 변화를 쉬운 말로 정리해 보려 합니다.",
+    (topic) => hook + ", 우리는 편리하게 사용하지만 그 뒤에 어떤 기술과 선택이 있었는지는 놓치기 쉽습니다. " + keyword + "가 필요한 이유는 무엇이고 " + topic + "은 일상에 어떻게 남았을까요? 이 글에서 생활 속 장면과 함께 핵심 원리를 살펴보겠습니다.",
+    (topic) => hook + ", 당연하게 쓰는 기능도 처음에는 해결해야 할 불편에서 출발했습니다. " + topic + "과 연결된 " + keyword + "는 왜 등장했고 지금의 생활을 어떻게 바꿨을까요? 이 글에서는 익숙한 장면부터 차근차근 짚어 보겠습니다.",
+  ];
+  const coreTemplates = [
+    (topic) => topic + "의 중심에는 " + keyword + "가 해결한 문제와 작동 원리가 있습니다. 이 변화가 오늘날 " + hook + "와 어떤 관계가 있는지 알면, 익숙한 기능을 보는 관점도 달라집니다. 이 글에서는 필요한 배경과 핵심 변화를 실제 생활에 맞춰 설명해 보겠습니다.",
+  ];
+  const storyTemplates = [
+    (topic) => hook + ", 지금은 손쉽게 하는 일이 예전에는 큰 불편이나 시간의 문제였을 수 있습니다. 그 간격을 줄이는 과정에서 " + keyword + "가 어떤 역할을 했는지, 그리고 " + topic + "이 오늘의 모습으로 이어진 이유는 무엇인지 차례로 살펴보겠습니다.",
   ];
   const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
-  for (let offset = 0; offset < openingTemplates.length; offset += 1) {
-    const opening = openingTemplates[(seed + offset) % openingTemplates.length];
-    for (let size = Math.min(30, cleanedTitle.length); size >= 8; size -= 1) {
+  const styles = [dailyTemplates, dailyTemplates, dailyTemplates, coreTemplates, storyTemplates];
+  const templates = styles[seed % styles.length];
+  for (let offset = 0; offset < templates.length; offset += 1) {
+    const opening = templates[(seed + offset) % templates.length];
+    for (let size = Math.min(34, cleanedTitle.length); size >= 8; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
       let summary = opening(topic);
       for (const suffix of suffixes) {
@@ -1529,7 +1538,6 @@ function buildCompliantApprovalSummary({title, keyword}) {
   }
   throw new Error("조건에 맞는 요약글을 만들지 못함");
 }
-
 function summaryParagraphBlock(summary) {
   return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
 }
