@@ -1478,66 +1478,78 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
   throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
 }
 
-function everydayHookForTitle(title) {
+function summaryContextForTitle(title) {
   const text = normalizeSpaces(title).toLowerCase();
-  const hooks = [
-    [["유리"], "창문 너머를 보거나 유리컵에 물을 따를 때"],
-    [["도자기", "그릇"], "밥그릇이나 찻잔을 사용할 때"],
-    [["전화", "통신", "전신"], "가족이나 친구에게 전화를 걸 때"],
-    [["전기조명", "조명", "전구"], "해가 진 뒤 집 안의 불을 켤 때"],
-    [["다리미", "의생활"], "옷을 다리거나 외출 준비를 할 때"],
-    [["철", "금속"], "냄비를 쓰거나 문손잡이를 잡을 때"],
-    [["인쇄", "독서"], "책이나 안내문을 읽을 때"],
-    [["무선", "방송", "진공관"], "휴대폰으로 소식을 확인하거나 라디오를 들을 때"],
-    [["주판", "계산"], "금액을 계산하거나 숫자를 정리할 때"],
-    [["도르래", "크랭크", "기계"], "엘리베이터나 자전거처럼 힘과 움직임이 바뀌는 장면을 볼 때"],
-    [["생활가전", "가전"], "세탁기나 청소기로 집안일을 할 때"],
-    [["별자리", "별"], "밤하늘의 별을 바라볼 때"],
-    [["농업", "센서", "토양"], "마트에서 채소와 과일을 고를 때"],
-    [["군중", "사람"], "출퇴근길이나 공연장에 많은 사람이 모일 때"],
-    [["외래 생물", "생물"], "공원이나 하천에서 낯선 식물과 물고기를 볼 때"],
-    [["철도", "기차"], "기차역에서 열차를 기다리거나 여행을 준비할 때"],
+  const specific = [
+    [["전기전도도"], {anchor: "양액이나 관수용 물의 수치를 비교해 볼 때", mode: "measurement"}],
+    [["기준선", "그래프"], {anchor: "재배 기록 그래프에 기준선을 표시해 볼 때", mode: "measurement"}],
+    [["비가", "토양 수분"], {anchor: "비가 그친 뒤 토양 수분 기록을 확인할 때", mode: "measurement"}],
+    [["자연광 부족", "조명 운영"], {anchor: "자연광이 부족한 시간에 보조 조명을 조절할 때", mode: "measurement"}],
+    [["오래된", "새로운 기록"], {anchor: "지난 재배 기록과 최근 측정값을 나란히 볼 때", mode: "measurement"}],
+    [["유리"], {anchor: "창문 너머를 보거나 유리컵에 물을 따를 때", mode: "daily"}],
+    [["도자기", "그릇"], {anchor: "밥그릇이나 찻잔을 사용할 때", mode: "daily"}],
+    [["전화", "통신", "전신"], {anchor: "가족이나 친구에게 전화를 걸 때", mode: "daily"}],
+    [["전기조명", "전구"], {anchor: "해가 진 뒤 집 안의 불을 켤 때", mode: "daily"}],
+    [["다리미", "의생활"], {anchor: "옷을 다리거나 외출 준비를 할 때", mode: "daily"}],
+    [["철", "금속"], {anchor: "냄비를 쓰거나 문손잡이를 잡을 때", mode: "daily"}],
+    [["인쇄", "독서"], {anchor: "책이나 안내문을 읽을 때", mode: "daily"}],
+    [["무선", "방송", "진공관"], {anchor: "휴대폰으로 소식을 확인하거나 라디오를 들을 때", mode: "daily"}],
+    [["주판", "계산"], {anchor: "금액을 계산하거나 숫자를 정리할 때", mode: "daily"}],
+    [["도르래", "크랭크", "기계"], {anchor: "엘리베이터나 자전거처럼 힘과 움직임이 바뀌는 장면을 볼 때", mode: "daily"}],
+    [["생활가전", "가전"], {anchor: "세탁기나 청소기로 집안일을 할 때", mode: "daily"}],
+    [["별자리", "별"], {anchor: "밤하늘의 별을 바라볼 때", mode: "daily"}],
+    [["농업", "센서", "토양"], {anchor: "재배 기록과 센서 수치를 함께 확인할 때", mode: "measurement"}],
+    [["군중", "사람"], {anchor: "출퇴근길이나 공연장에 많은 사람이 모일 때", mode: "daily"}],
+    [["외래 생물", "생물"], {anchor: "공원이나 하천에서 낯선 식물과 물고기를 볼 때", mode: "daily"}],
+    [["철도", "기차"], {anchor: "기차역에서 열차를 기다리거나 여행을 준비할 때", mode: "daily"}],
   ];
-  const found = hooks.find(([tokens]) => tokens.some((token) => text.includes(token)));
-  return found ? found[1] : compactKoreanPhrase(title) + "과 관련된 물건이나 장면을 마주할 때";
+  const found = specific.find(([tokens]) => tokens.every((token) => text.includes(token)));
+  return found ? found[1] : {anchor: compactKoreanPhrase(title) + "의 내용을 확인할 때", mode: "core"};
 }
 
 function buildCompliantApprovalSummary({title, keyword}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
-  const hook = everydayHookForTitle(title);
+  const context = summaryContextForTitle(title);
   const suffixes = [
-    " 핵심을 일상과 연결해 쉽게 살펴보겠습니다.",
-    " 처음 접하는 분도 이해하기 쉽게 풀어보겠습니다.",
-    " 실제 생활에서 어떤 의미가 있는지 차근차근 알아보겠습니다.",
+    " 처음 보는 분도 흐름을 따라갈 수 있게 풀어보겠습니다.",
+    " 필요한 판단 기준을 쉬운 말로 정리해 보겠습니다.",
+    " 실제로 확인할 순서를 중심으로 살펴보겠습니다.",
+  ];
+  const technicalTemplates = [
+    (topic) => context.anchor + "에는 " + keyword + "가 보여 주는 값만큼 측정 조건과 기록 순서가 중요합니다. " + topic + "를 살필 때 어떤 기준을 먼저 맞춰야 수치를 헷갈리지 않을까요? 이 글에서는 비교 기준과 확인 순서를 정리합니다.",
+    (topic) => topic + "는 한 번의 수치보다 시간에 따라 남긴 " + keyword + " 기록을 함께 볼 때 의미가 또렷해집니다. " + context.anchor + "에는 어떤 값이 변화를 알려 주고, 무엇을 따로 적어 두어야 할까요? 이 글에서 판단에 필요한 기준을 살펴봅니다.",
+    (topic) => context.anchor + "에는 눈에 보이는 변화와 " + keyword + " 데이터가 꼭 같은 속도로 움직이지 않을 수 있습니다. 그래서 " + topic + "를 확인할 때는 무엇을 비교하고 어떤 차이를 조심해야 하는지, 이 글에서 차근차근 짚어 보겠습니다.",
+    (topic) => keyword + " 데이터를 읽을 때는 값 하나를 좋고 나쁨으로 단정하기보다 측정 환경과 이전 기록을 함께 봐야 합니다. " + topic + "를 통해 " + context.anchor + "에 필요한 확인 순서는 어떻게 잡을 수 있을까요? 핵심만 정리해 보겠습니다.",
   ];
   const dailyTemplates = [
-    (topic) => hook + ", 지금은 자연스러운 이 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 그 배경과 변화를 쉬운 말로 정리해 보려 합니다.",
-    (topic) => hook + ", 우리는 편리하게 사용하지만 그 뒤에 어떤 기술과 선택이 있었는지는 놓치기 쉽습니다. " + keyword + "가 필요한 이유는 무엇이고 " + topic + "은 일상에 어떻게 남았을까요? 이 글에서 생활 속 장면과 함께 핵심 원리를 살펴보겠습니다.",
-    (topic) => hook + ", 당연하게 쓰는 기능도 처음에는 해결해야 할 불편에서 출발했습니다. " + topic + "과 연결된 " + keyword + "는 왜 등장했고 지금의 생활을 어떻게 바꿨을까요? 이 글에서는 익숙한 장면부터 차근차근 짚어 보겠습니다.",
+    (topic) => context.anchor + ", 익숙한 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 배경과 변화를 쉬운 말로 정리해 보려 합니다.",
+    (topic) => context.anchor + ", 편리하게 쓰는 기능 뒤에 어떤 기술과 선택이 있었는지는 놓치기 쉽습니다. " + keyword + "가 필요한 이유는 무엇이고 " + topic + "은 일상에 어떻게 남았을까요? 이 글에서 생활 속 장면과 함께 핵심 원리를 살펴보겠습니다.",
+    (topic) => context.anchor + ", 지금의 편리함도 처음에는 해결해야 할 불편에서 출발했습니다. " + topic + "과 연결된 " + keyword + "는 왜 등장했고 생활을 어떻게 바꿨을까요? 이 글에서는 익숙한 장면부터 차근차근 짚어 보겠습니다.",
   ];
   const coreTemplates = [
-    (topic) => topic + "의 중심에는 " + keyword + "가 해결한 문제와 작동 원리가 있습니다. 이 변화가 오늘날 " + hook + "와 어떤 관계가 있는지 알면, 익숙한 기능을 보는 관점도 달라집니다. 이 글에서는 필요한 배경과 핵심 변화를 실제 생활에 맞춰 설명해 보겠습니다.",
+    (topic) => topic + "의 중심에는 " + keyword + "가 해결한 문제와 작동 원리가 있습니다. 이 내용을 알면 " + context.anchor + "에도 필요한 기준을 더 분명하게 볼 수 있습니다. 이 글에서는 핵심 개념과 변화의 흐름을 실제 사례에 맞춰 설명해 보겠습니다.",
+    (topic) => "무엇을 기준으로 살펴봐야 하는지부터 잡으면 " + topic + "의 의미가 훨씬 분명해집니다. " + keyword + "는 어떤 문제를 해결하며, 결과를 이해할 때 놓치지 말아야 할 점은 무엇일까요? 이 글에서 핵심 흐름을 정리합니다.",
   ];
-  const storyTemplates = [
-    (topic) => hook + ", 지금은 손쉽게 하는 일이 예전에는 큰 불편이나 시간의 문제였을 수 있습니다. 그 간격을 줄이는 과정에서 " + keyword + "가 어떤 역할을 했는지, 그리고 " + topic + "이 오늘의 모습으로 이어진 이유는 무엇인지 차례로 살펴보겠습니다.",
-  ];
+  const templates = context.mode === "measurement" ? technicalTemplates : context.mode === "daily" ? dailyTemplates : coreTemplates;
   const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
-  const styles = [dailyTemplates, dailyTemplates, dailyTemplates, coreTemplates, storyTemplates];
-  const templates = styles[seed % styles.length];
   for (let offset = 0; offset < templates.length; offset += 1) {
     const opening = templates[(seed + offset) % templates.length];
-    for (let size = Math.min(34, cleanedTitle.length); size >= 8; size -= 1) {
+    for (let size = Math.min(42, cleanedTitle.length); size >= 10; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
       let summary = opening(topic);
       for (const suffix of suffixes) {
         if ([...summary].length >= 140) break;
         if ([...summary + suffix].length <= 160) summary += suffix;
       }
+      if (/[마트에서 채소와 과일|당연하게 여기던 장면|오래전에는 쉽지 않았]/.test(summary)) {
+        throw new Error("제목과 무관한 일상 도입문이 요약글에 포함됨");
+      }
       if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
     }
   }
   throw new Error("조건에 맞는 요약글을 만들지 못함");
 }
+
 function summaryParagraphBlock(summary) {
   return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
 }
