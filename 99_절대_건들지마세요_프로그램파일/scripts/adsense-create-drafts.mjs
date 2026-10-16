@@ -1563,7 +1563,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
   const templates = [
     (topic) => situation + " " + topic + "에서 " + keyword + "는 무엇을 먼저 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 얻을 수 있도록 핵심을 정리합니다.",
     (topic) => situation + " " + keyword + "를 이해하면 " + topic + "을 바라보는 기준이 달라질 수 있습니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "을 살펴봅니다.",
-    (topic) => situation + " " + topic + "을 통해 " + keyword + "의 의미를 알면 막연한 궁금증을 실제 판단으로 이어 갈 수 있습니다. 이 글에서는 " + plan.outcome + "을 정리합니다.",
+    (topic) => situation + " " + topic + "을 통해 " + keyword + "의 의미를 알면 막연한 궁금증을 실제 판단으로 어떻게 이어 갈 수 있을까요? 이 글에서는 " + plan.outcome + "을 정리합니다.",
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
