@@ -1555,17 +1555,26 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
   const plan = summaryPlanForSite(site);
   const situation = situationForTitle(title, site);
   const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
+  const suffixes = [
+    " 필요한 내용을 차근차근 살펴보겠습니다.",
+    " 실제 상황에 적용할 수 있게 정리해 보겠습니다.",
+    " 핵심을 쉬운 말로 알아보겠습니다.",
+  ];
   const templates = [
-    (topic) => situation + " " + keyword + "와 관련된 " + topic + "에서는 무엇을 먼저 이해하면 좋을까요? 이 글에서는 " + plan.reader + "가 " + plan.outcome + "을 얻도록 핵심을 정리합니다.",
-    (topic) => situation + " " + topic + "을 이해하면 지금의 선택과 장면을 다른 관점에서 볼 수 있습니다. " + keyword + "는 어떤 이유로 중요하며, 실제로 어떻게 살펴봐야 할까요? 이 글에서 " + plan.outcome + "을 알아봅니다.",
-    (topic) => situation + " 이때 " + keyword + "를 알면 막연한 궁금증을 실제 판단과 관찰로 이어 갈 수 있습니다. " + topic + "을 통해 " + plan.reader + "에게 필요한 " + plan.outcome + "을 살펴보겠습니다.",
+    (topic) => situation + " " + topic + "에서 " + keyword + "는 무엇을 먼저 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 얻을 수 있도록 핵심을 정리합니다.",
+    (topic) => situation + " " + keyword + "를 이해하면 " + topic + "을 바라보는 기준이 달라질 수 있습니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "을 살펴봅니다.",
+    (topic) => situation + " " + topic + "을 통해 " + keyword + "의 의미를 알면 막연한 궁금증을 실제 판단으로 이어 갈 수 있습니다. 이 글에서는 " + plan.outcome + "을 정리합니다.",
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
     const opening = templates[(seed + offset) % templates.length];
-    for (let size = Math.min(42, cleanedTitle.length); size >= 10; size -= 1) {
+    for (let size = Math.min(34, cleanedTitle.length); size >= 6; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
-      const summary = opening(topic);
+      let summary = opening(topic);
+      for (const suffix of suffixes) {
+        if ([...summary].length >= 140) break;
+        if ([...summary + suffix].length <= 160) summary += suffix;
+      }
       if (blocked.test(summary)) throw new Error("제목과 무관하거나 반복된 고정 도입문이 요약글에 포함됨");
       if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
     }
