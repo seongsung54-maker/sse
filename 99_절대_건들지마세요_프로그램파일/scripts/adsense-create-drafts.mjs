@@ -1478,87 +1478,50 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
   throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
 }
 
-function summaryContextForTitle(title) {
+function summaryPlanForSite(site) {
+  const plans = {
+    1: {reader: "역사를 좋아하는 독자", outcome: "발명품의 역사성을 새롭게 보는 관점"},
+    2: {reader: "별자리 관측 입문자와 관측 경험자", outcome: "다음 관측에 적용할 준비 방법"},
+    3: {reader: "농업용 센서를 처음 쓰는 농업인", outcome: "기록으로 문제에 대응하는 방법"},
+    4: {reader: "사회생활을 하는 독자", outcome: "내 반응을 이해하고 타인과 공감하는 관점"},
+    5: {reader: "뉴스 속 외래생물과 환경에 관심 있는 독자", outcome: "주변 생태와의 연결을 보는 시선"},
+    6: {reader: "덴마크 여행·건축·디자인에 관심 있는 독자", outcome: "여행과 디자인 관점의 새 정보"},
+  };
+  return plans[Number(site)] || {reader: "관련 정보를 처음 확인하는 독자", outcome: "핵심을 이해하는 데 필요한 관점"};
+}
+
+function site4SituationForTitle(title) {
   const text = normalizeSpaces(title).toLowerCase();
-  const specific = [
-    [["전기전도도"], {anchor: "양액이나 관수용 물의 수치를 비교해 볼 때", mode: "measurement"}],
-    [["기준선", "그래프"], {anchor: "재배 기록 그래프에 기준선을 표시해 볼 때", mode: "measurement"}],
-    [["비가", "토양 수분"], {anchor: "비가 그친 뒤 토양 수분 기록을 확인할 때", mode: "measurement"}],
-    [["자연광 부족", "조명 운영"], {anchor: "자연광이 부족한 시간에 보조 조명을 조절할 때", mode: "measurement"}],
-    [["오래된", "새로운 기록"], {anchor: "지난 재배 기록과 최근 측정값을 나란히 볼 때", mode: "measurement"}],
-    [["유리"], {anchor: "창문 너머를 보거나 유리컵에 물을 따를 때", mode: "daily"}],
-    [["도자기", "그릇"], {anchor: "밥그릇이나 찻잔을 사용할 때", mode: "daily"}],
-    [["전화", "통신", "전신"], {anchor: "가족이나 친구에게 전화를 걸 때", mode: "daily"}],
-    [["전기조명", "전구"], {anchor: "해가 진 뒤 집 안의 불을 켤 때", mode: "daily"}],
-    [["다리미", "의생활"], {anchor: "옷을 다리거나 외출 준비를 할 때", mode: "daily"}],
-    [["철", "금속"], {anchor: "냄비를 쓰거나 문손잡이를 잡을 때", mode: "daily"}],
-    [["인쇄", "독서"], {anchor: "책이나 안내문을 읽을 때", mode: "daily"}],
-    [["무선", "방송", "진공관"], {anchor: "휴대폰으로 소식을 확인하거나 라디오를 들을 때", mode: "daily"}],
-    [["주판", "계산"], {anchor: "금액을 계산하거나 숫자를 정리할 때", mode: "daily"}],
-    [["도르래", "크랭크", "기계"], {anchor: "엘리베이터나 자전거처럼 힘과 움직임이 바뀌는 장면을 볼 때", mode: "daily"}],
-    [["생활가전", "가전"], {anchor: "세탁기나 청소기로 집안일을 할 때", mode: "daily"}],
-    [["별자리", "별"], {anchor: "밤하늘의 별을 바라볼 때", mode: "daily"}],
-    [["농업", "센서", "토양"], {anchor: "재배 기록과 센서 수치를 함께 확인할 때", mode: "measurement"}],
-    [["군중", "사람"], {anchor: "출퇴근길이나 공연장에 많은 사람이 모일 때", mode: "daily"}],
-    [["외래 생물", "생물"], {anchor: "공원이나 하천에서 낯선 식물과 물고기를 볼 때", mode: "daily"}],
-    [["철도", "기차"], {anchor: "기차역에서 열차를 기다리거나 여행을 준비할 때", mode: "daily"}],
-  ];
-  const found = specific.find(([tokens]) => tokens.every((token) => text.includes(token)));
-  return found ? found[1] : {anchor: compactKoreanPhrase(title) + "의 내용을 확인할 때", mode: "core"};
+  if (text.includes("회의") || text.includes("아이디어")) return "회의에서 먼저 나온 의견이 뒤의 생각까지 흔드는 경험은 누구에게나 있을 수 있습니다.";
+  if (text.includes("운영진") || text.includes("회원 의견")) return "운영진끼리 결론을 서두르다 보면 조용한 회원의 의견이 빠지는 순간이 생길 수 있습니다.";
+  if (text.includes("육아용품") || text.includes("가정")) return "다른 가정이 많이 고른 육아용품을 보면 나도 같은 선택이 더 안전해 보일 수 있습니다.";
+  if (text.includes("규범") || text.includes("상황")) return "같은 사람도 모임의 분위기와 상황이 달라지면 평소와 다른 기준을 따르곤 합니다.";
+  if (text.includes("아파트") || text.includes("주민")) return "같은 아파트 동에 산다는 이유만으로 낯선 이웃에게도 더 친밀감을 느끼는 경우가 있습니다.";
+  return compactKoreanPhrase(title) + "과 관련된 상황에서는 주변의 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.";
 }
 
-
-function readerProfileForSite(site) {
-  const profiles = {
-    1: "역사를 좋아하는 독자",
-    2: "별자리 관측 입문자와 관측 경험자",
-    3: "농업용 센서를 처음 쓰는 농업인",
-    4: "사회생활을 하는 독자",
-    5: "뉴스 속 외래생물과 환경에 관심 있는 독자",
-    6: "덴마크 여행·건축·디자인에 관심 있는 독자",
-  };
-  return profiles[Number(site)] || "관련 정보를 처음 확인하는 독자";
-}
-
-function readerOutcomeForSite(site) {
-  const outcomes = {
-    1: "발명품의 역사성을 새롭게 보는 관점",
-    2: "다음 관측에 적용할 준비 방법",
-    3: "기록으로 문제에 대응하는 방법",
-    4: "내 반응을 이해하고 공감하는 관점",
-    5: "주변 생태와의 연결을 보는 시선",
-    6: "여행과 디자인 관점의 새 정보",
-  };
-  return outcomes[Number(site)] || "핵심을 이해하는 데 필요한 관점";
-}
-
-function buildCompliantApprovalSummary({title, keyword, reader = "", outcome = ""}) {
+function buildCompliantApprovalSummary({title, keyword, site = 0}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
-  const context = summaryContextForTitle(title);
-  const audience = reader || "관련 정보를 처음 확인하는 독자";
-  const benefit = outcome || "핵심을 이해하는 데 필요한 관점";
-  const suffixes = [
-    " 처음 보는 분도 흐름을 따라갈 수 있게 풀어보겠습니다.",
-    " 필요한 판단 기준을 쉬운 말로 정리해 보겠습니다.",
-    " 실제로 확인할 순서를 중심으로 살펴보겠습니다.",
-  ];
-  const technicalTemplates = [
-    (topic) => audience + "가 " + context.anchor + "에는 " + keyword + "가 보여 주는 값만큼 측정 조건과 기록 순서가 중요합니다. " + topic + "를 살필 때 어떤 기준을 먼저 맞춰야 수치를 헷갈리지 않을까요? 이 글에서는 비교 기준과 확인 순서를 정리합니다.",
-    (topic) => audience + "라면 " + topic + "는 한 번의 수치보다 시간에 따라 남긴 " + keyword + " 기록을 함께 볼 때 의미가 또렷해집니다. " + context.anchor + "에는 어떤 값이 변화를 알려 주고, 무엇을 따로 적어 두어야 할까요? 이 글에서 판단에 필요한 기준을 살펴봅니다.",
-    (topic) => audience + "가 " + context.anchor + "에는 눈에 보이는 변화와 " + keyword + " 데이터가 꼭 같은 속도로 움직이지 않을 수 있습니다. 그래서 " + topic + "를 확인할 때는 무엇을 비교하고 어떤 차이를 조심해야 하는지, 이 글에서 차근차근 짚어 보겠습니다.",
-    (topic) => audience + "가 " + keyword + " 데이터를 읽을 때는 값 하나를 좋고 나쁨으로 단정하기보다 측정 환경과 이전 기록을 함께 봐야 합니다. " + topic + "를 통해 " + context.anchor + "에 필요한 확인 순서는 어떻게 잡을 수 있을까요? 핵심만 정리해 보겠습니다.",
-  ];
-  const dailyTemplates = [
-    (topic) => context.anchor + ", 익숙한 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 " + benefit + "을 중심으로 배경을 정리해 보려 합니다.",
-    (topic) => context.anchor + ", 편리하게 쓰는 기능 뒤에 어떤 기술과 선택이 있었는지는 놓치기 쉽습니다. " + keyword + "가 필요한 이유는 무엇이고 " + topic + "은 일상에 어떻게 남았을까요? 이 글에서는 " + benefit + "에 도움이 될 핵심 원리를 살펴보겠습니다.",
-    (topic) => context.anchor + ", 지금의 편리함도 처음에는 해결해야 할 불편에서 출발했습니다. " + topic + "과 연결된 " + keyword + "는 왜 등장했고 생활을 어떻게 바꿨을까요? 이 글에서는 " + benefit + "을 위해 익숙한 장면부터 차근차근 짚어 보겠습니다.",
-  ];
-  const coreTemplates = [
-    (topic) => topic + "의 중심에는 " + keyword + "가 해결한 문제와 작동 원리가 있습니다. 이 내용을 알면 " + context.anchor + "에도 필요한 기준을 더 분명하게 볼 수 있습니다. 이 글에서는 핵심 개념과 변화의 흐름을 실제 사례에 맞춰 설명해 보겠습니다.",
-    (topic) => "무엇을 기준으로 살펴봐야 하는지부터 잡으면 " + topic + "의 의미가 훨씬 분명해집니다. " + keyword + "는 어떤 문제를 해결하며, 결과를 이해할 때 놓치지 말아야 할 점은 무엇일까요? 이 글에서 핵심 흐름을 정리합니다.",
-  ];
-  const templates = context.mode === "measurement" ? technicalTemplates : context.mode === "daily" ? dailyTemplates : coreTemplates;
+  const plan = summaryPlanForSite(site);
   const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
+  const suffixes = [
+    " 처음 접하는 분도 흐름을 따라갈 수 있게 풀어보겠습니다.",
+    " 실제 상황에 적용할 수 있도록 차근차근 정리해 보겠습니다.",
+    " 필요한 판단 기준을 쉬운 말로 살펴보겠습니다.",
+  ];
+  const site4Templates = [
+    (topic) => site4SituationForTitle(title) + " " + keyword + "는 왜 이런 반응을 만들고, " + topic + "에서는 무엇을 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 얻을 수 있도록 핵심을 정리합니다.",
+    (topic) => site4SituationForTitle(title) + " " + topic + "를 이해하면 내 선택이 주변의 영향을 받은 순간을 돌아볼 수 있습니다. " + keyword + "의 작동 방식을 통해 " + plan.outcome + "을 차분히 살펴보겠습니다.",
+    (topic) => site4SituationForTitle(title) + " 이때 " + keyword + "를 알면 나만 이상한 반응을 한 것이 아니라는 점을 이해할 수 있습니다. " + topic + "을 통해 " + plan.outcome + "을 정리해 보겠습니다.",
+  ];
+  const siteTemplates = {
+    1: [(topic) => "평소 사용하는 물건과 기술에도 오랜 시간에 걸친 발명의 흔적이 남아 있습니다. " + topic + "은 오늘의 생활과 어떻게 이어졌을까요? " + keyword + "를 통해 " + plan.reader + "가 " + plan.outcome + "을 얻을 수 있도록 살펴보겠습니다."],
+    2: [(topic) => "별자리를 찾으러 나갔을 때 방향과 시간, 날씨 때문에 예상보다 어려움을 겪을 수 있습니다. " + topic + "을 관측할 때 무엇부터 확인해야 할까요? " + keyword + "를 통해 " + plan.outcome + "을 차근차근 살펴보겠습니다."],
+    3: [(topic) => "재배 현장의 수치는 한 번의 값만으로 결론내리기보다 기록과 측정 조건을 함께 살펴야 합니다. " + topic + "에서 " + keyword + "를 어떻게 읽어야 할까요? " + plan.reader + "이 " + plan.outcome + "을 얻도록 설명합니다."],
+    5: [(topic) => "뉴스에서 본 외래생물은 문제로만 느껴지기 쉽지만, 실제로는 우리 주변 환경과 생활에 여러 방식으로 연결돼 있습니다. " + topic + "을 통해 " + keyword + "를 어떤 시선으로 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 정리합니다."],
+    6: [(topic) => "덴마크를 여행하거나 건축과 디자인을 살펴볼 때 철도시설은 단순한 이동수단 이상으로 보일 수 있습니다. " + topic + "은 어떤 특징을 보여 줄까요? " + keyword + "를 통해 " + plan.outcome + "을 알아보겠습니다."],
+  };
+  const templates = Number(site) === 4 ? site4Templates : siteTemplates[Number(site)] || [(topic) => topic + "을 이해하려면 " + keyword + "의 핵심과 실제 적용 장면을 함께 살펴볼 필요가 있습니다. " + plan.reader + "가 무엇을 확인하면 좋을까요? 이 글에서는 " + plan.outcome + "을 중심으로 정리합니다."];
   for (let offset = 0; offset < templates.length; offset += 1) {
     const opening = templates[(seed + offset) % templates.length];
     for (let size = Math.min(42, cleanedTitle.length); size >= 10; size -= 1) {
@@ -1568,9 +1531,7 @@ function buildCompliantApprovalSummary({title, keyword, reader = "", outcome = "
         if ([...summary].length >= 140) break;
         if ([...summary + suffix].length <= 160) summary += suffix;
       }
-      if (/[마트에서 채소와 과일|당연하게 여기던 장면|오래전에는 쉽지 않았]/.test(summary)) {
-        throw new Error("제목과 무관한 일상 도입문이 요약글에 포함됨");
-      }
+      if (/출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/.test(summary)) throw new Error("제목과 무관하거나 반복된 고정 도입문이 요약글에 포함됨");
       if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
     }
   }
@@ -1664,7 +1625,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
   let html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   if (키워드) {
-    const summary = buildCompliantApprovalSummary({title, keyword: 키워드, reader: readerProfileForSite(site), outcome: readerOutcomeForSite(site)});
+    const summary = buildCompliantApprovalSummary({title, keyword: 키워드, site});
     html = applyApprovalSummary(html, summary);
     validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
