@@ -1507,19 +1507,33 @@ function summaryContextForTitle(title) {
   return found ? found[1] : {anchor: compactKoreanPhrase(title) + "의 내용을 확인할 때", mode: "core"};
 }
 
-function buildCompliantApprovalSummary({title, keyword}) {
+
+function readerProfileForSite(site) {
+  const profiles = {
+    1: "발명의 원리를 처음 찾아보는 독자",
+    2: "별자리 관측을 시작한 독자",
+    3: "센서 기록을 관리하는 재배자",
+    4: "생활 속 수리 정보를 찾는 독자",
+    5: "생태 변화를 처음 살펴보는 독자",
+    6: "생활 제도를 확인하는 독자",
+  };
+  return profiles[Number(site)] || "관련 정보를 처음 확인하는 독자";
+}
+
+function buildCompliantApprovalSummary({title, keyword, reader = ""}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
   const context = summaryContextForTitle(title);
+  const audience = reader || "관련 정보를 처음 확인하는 독자";
   const suffixes = [
     " 처음 보는 분도 흐름을 따라갈 수 있게 풀어보겠습니다.",
     " 필요한 판단 기준을 쉬운 말로 정리해 보겠습니다.",
     " 실제로 확인할 순서를 중심으로 살펴보겠습니다.",
   ];
   const technicalTemplates = [
-    (topic) => context.anchor + "에는 " + keyword + "가 보여 주는 값만큼 측정 조건과 기록 순서가 중요합니다. " + topic + "를 살필 때 어떤 기준을 먼저 맞춰야 수치를 헷갈리지 않을까요? 이 글에서는 비교 기준과 확인 순서를 정리합니다.",
-    (topic) => topic + "는 한 번의 수치보다 시간에 따라 남긴 " + keyword + " 기록을 함께 볼 때 의미가 또렷해집니다. " + context.anchor + "에는 어떤 값이 변화를 알려 주고, 무엇을 따로 적어 두어야 할까요? 이 글에서 판단에 필요한 기준을 살펴봅니다.",
-    (topic) => context.anchor + "에는 눈에 보이는 변화와 " + keyword + " 데이터가 꼭 같은 속도로 움직이지 않을 수 있습니다. 그래서 " + topic + "를 확인할 때는 무엇을 비교하고 어떤 차이를 조심해야 하는지, 이 글에서 차근차근 짚어 보겠습니다.",
-    (topic) => keyword + " 데이터를 읽을 때는 값 하나를 좋고 나쁨으로 단정하기보다 측정 환경과 이전 기록을 함께 봐야 합니다. " + topic + "를 통해 " + context.anchor + "에 필요한 확인 순서는 어떻게 잡을 수 있을까요? 핵심만 정리해 보겠습니다.",
+    (topic) => audience + "가 " + context.anchor + "에는 " + keyword + "가 보여 주는 값만큼 측정 조건과 기록 순서가 중요합니다. " + topic + "를 살필 때 어떤 기준을 먼저 맞춰야 수치를 헷갈리지 않을까요? 이 글에서는 비교 기준과 확인 순서를 정리합니다.",
+    (topic) => audience + "라면 " + topic + "는 한 번의 수치보다 시간에 따라 남긴 " + keyword + " 기록을 함께 볼 때 의미가 또렷해집니다. " + context.anchor + "에는 어떤 값이 변화를 알려 주고, 무엇을 따로 적어 두어야 할까요? 이 글에서 판단에 필요한 기준을 살펴봅니다.",
+    (topic) => audience + "가 " + context.anchor + "에는 눈에 보이는 변화와 " + keyword + " 데이터가 꼭 같은 속도로 움직이지 않을 수 있습니다. 그래서 " + topic + "를 확인할 때는 무엇을 비교하고 어떤 차이를 조심해야 하는지, 이 글에서 차근차근 짚어 보겠습니다.",
+    (topic) => audience + "가 " + keyword + " 데이터를 읽을 때는 값 하나를 좋고 나쁨으로 단정하기보다 측정 환경과 이전 기록을 함께 봐야 합니다. " + topic + "를 통해 " + context.anchor + "에 필요한 확인 순서는 어떻게 잡을 수 있을까요? 핵심만 정리해 보겠습니다.",
   ];
   const dailyTemplates = [
     (topic) => context.anchor + ", 익숙한 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 배경과 변화를 쉬운 말로 정리해 보려 합니다.",
@@ -1560,7 +1574,7 @@ function applyApprovalSummary(html, summary) {
   return `${summaryParagraphBlock(summary)}\n\n${html.trim()}`;
 }
 
-async function generateArticle({apiKey, model, title, minChars, 키워드 = ""}) {
+async function generateArticle({apiKey, model, title, minChars, 키워드 = "", site = 0}) {
   const systemPrompt = [
     "너는 애드센스 승인용 정보성 글을 작성하는 한국어 에디터다.",
     "허위 정보, 과장, 출처 없는 단정, 의료/법률/금융 확정 조언을 피한다.",
@@ -1637,7 +1651,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = ""})
   let html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   if (키워드) {
-    const summary = buildCompliantApprovalSummary({title, keyword: 키워드});
+    const summary = buildCompliantApprovalSummary({title, keyword: 키워드, reader: readerProfileForSite(site)});
     html = applyApprovalSummary(html, summary);
     validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
@@ -1992,7 +2006,7 @@ for (let index = 0; index < titles.length; index += 1) {
     let 짧음 = false;
     for (let 시도 = 1; 시도 <= 2; 시도 += 1) {
       try {
-        const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword});
+        const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword, site});
         html = made.html;
         articleUsage = made.usage;
         짧음 = made.짧음;
