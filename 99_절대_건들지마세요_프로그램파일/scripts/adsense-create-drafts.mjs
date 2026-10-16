@@ -1510,20 +1510,33 @@ function summaryContextForTitle(title) {
 
 function readerProfileForSite(site) {
   const profiles = {
-    1: "발명의 원리를 처음 찾아보는 독자",
-    2: "별자리 관측을 시작한 독자",
-    3: "센서 기록을 관리하는 재배자",
-    4: "군중 행동의 원리를 이해하려는 독자",
-    5: "외래생물 문제를 살펴보는 독자",
-    6: "생활 속 정보를 차분히 이해하려는 독자",
+    1: "역사를 좋아하는 독자",
+    2: "별자리 관측 입문자와 관측 경험자",
+    3: "농업용 센서를 처음 쓰는 농업인",
+    4: "사회생활을 하는 독자",
+    5: "뉴스 속 외래생물과 환경에 관심 있는 독자",
+    6: "덴마크 여행·건축·디자인에 관심 있는 독자",
   };
   return profiles[Number(site)] || "관련 정보를 처음 확인하는 독자";
 }
 
-function buildCompliantApprovalSummary({title, keyword, reader = ""}) {
+function readerOutcomeForSite(site) {
+  const outcomes = {
+    1: "발명품의 역사성을 새롭게 보는 관점",
+    2: "다음 관측에 적용할 준비 방법",
+    3: "기록으로 문제에 대응하는 방법",
+    4: "내 반응을 이해하고 공감하는 관점",
+    5: "주변 생태와의 연결을 보는 시선",
+    6: "여행과 디자인 관점의 새 정보",
+  };
+  return outcomes[Number(site)] || "핵심을 이해하는 데 필요한 관점";
+}
+
+function buildCompliantApprovalSummary({title, keyword, reader = "", outcome = ""}) {
   const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
   const context = summaryContextForTitle(title);
   const audience = reader || "관련 정보를 처음 확인하는 독자";
+  const benefit = outcome || "핵심을 이해하는 데 필요한 관점";
   const suffixes = [
     " 처음 보는 분도 흐름을 따라갈 수 있게 풀어보겠습니다.",
     " 필요한 판단 기준을 쉬운 말로 정리해 보겠습니다.",
@@ -1536,9 +1549,9 @@ function buildCompliantApprovalSummary({title, keyword, reader = ""}) {
     (topic) => audience + "가 " + keyword + " 데이터를 읽을 때는 값 하나를 좋고 나쁨으로 단정하기보다 측정 환경과 이전 기록을 함께 봐야 합니다. " + topic + "를 통해 " + context.anchor + "에 필요한 확인 순서는 어떻게 잡을 수 있을까요? 핵심만 정리해 보겠습니다.",
   ];
   const dailyTemplates = [
-    (topic) => context.anchor + ", 익숙한 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 배경과 변화를 쉬운 말로 정리해 보려 합니다.",
-    (topic) => context.anchor + ", 편리하게 쓰는 기능 뒤에 어떤 기술과 선택이 있었는지는 놓치기 쉽습니다. " + keyword + "가 필요한 이유는 무엇이고 " + topic + "은 일상에 어떻게 남았을까요? 이 글에서 생활 속 장면과 함께 핵심 원리를 살펴보겠습니다.",
-    (topic) => context.anchor + ", 지금의 편리함도 처음에는 해결해야 할 불편에서 출발했습니다. " + topic + "과 연결된 " + keyword + "는 왜 등장했고 생활을 어떻게 바꿨을까요? 이 글에서는 익숙한 장면부터 차근차근 짚어 보겠습니다.",
+    (topic) => context.anchor + ", 익숙한 장면이 어떤 원리에서 시작됐는지 떠올려 본 적 있으신가요? " + keyword + "의 핵심을 알면 " + topic + "이 오늘의 생활과 어떻게 이어지는지 더 선명하게 보입니다. 이 글에서는 " + benefit + "을 중심으로 배경을 정리해 보려 합니다.",
+    (topic) => context.anchor + ", 편리하게 쓰는 기능 뒤에 어떤 기술과 선택이 있었는지는 놓치기 쉽습니다. " + keyword + "가 필요한 이유는 무엇이고 " + topic + "은 일상에 어떻게 남았을까요? 이 글에서는 " + benefit + "에 도움이 될 핵심 원리를 살펴보겠습니다.",
+    (topic) => context.anchor + ", 지금의 편리함도 처음에는 해결해야 할 불편에서 출발했습니다. " + topic + "과 연결된 " + keyword + "는 왜 등장했고 생활을 어떻게 바꿨을까요? 이 글에서는 " + benefit + "을 위해 익숙한 장면부터 차근차근 짚어 보겠습니다.",
   ];
   const coreTemplates = [
     (topic) => topic + "의 중심에는 " + keyword + "가 해결한 문제와 작동 원리가 있습니다. 이 내용을 알면 " + context.anchor + "에도 필요한 기준을 더 분명하게 볼 수 있습니다. 이 글에서는 핵심 개념과 변화의 흐름을 실제 사례에 맞춰 설명해 보겠습니다.",
@@ -1651,7 +1664,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
   let html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   if (키워드) {
-    const summary = buildCompliantApprovalSummary({title, keyword: 키워드, reader: readerProfileForSite(site)});
+    const summary = buildCompliantApprovalSummary({title, keyword: 키워드, reader: readerProfileForSite(site), outcome: readerOutcomeForSite(site)});
     html = applyApprovalSummary(html, summary);
     validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
