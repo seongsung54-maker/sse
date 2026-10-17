@@ -296,7 +296,7 @@ ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_
   }
   원고.제목후보 = Array.isArray(원고.제목후보) ? [...new Set(원고.제목후보.map((x) => String(x).trim()).filter(Boolean))].slice(0, 3) : [];
   if (원고.제목후보.length !== 3) throw new Error("제목 후보 3개를 만들지 못했습니다.");
-  if (키워드 && 원고.제목후보.some((x) => !x.startsWith(키워드))) throw new Error("제목 후보가 검색 키워드로 시작하지 않습니다.");
+  if (키워드) 원고.제목후보 = 원고.제목후보.map((x) => x.startsWith(키워드) ? x : `${키워드} ${x}`.slice(0, 40));
   원고.제목 = 원고.제목후보[0];
   let 검증 = await 원고검증({ 키, 주제명: 선택주제, 조사결과, 원고 });
   쓴돈.push(검증.사용량);
@@ -306,7 +306,7 @@ ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_
     원고 = 수정.원고;
     원고.제목후보 = Array.isArray(원고.제목후보) ? [...new Set(원고.제목후보.map((x) => String(x).trim()).filter(Boolean))].slice(0, 3) : [];
     if (원고.제목후보.length !== 3) throw new Error("자동 수정 뒤 제목 후보 3개를 만들지 못했습니다.");
-    if (키워드 && 원고.제목후보.some((x) => !x.startsWith(키워드))) throw new Error("자동 수정 뒤 제목 후보가 검색 키워드로 시작하지 않습니다.");
+    if (키워드) 원고.제목후보 = 원고.제목후보.map((x) => x.startsWith(키워드) ? x : `${키워드} ${x}`.slice(0, 40));
     원고.제목 = 원고.제목후보[0];
     검증 = await 원고검증({ 키, 주제명: 선택주제, 조사결과, 원고 });
     쓴돈.push(검증.사용량);
