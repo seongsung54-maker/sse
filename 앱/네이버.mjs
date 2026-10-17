@@ -182,7 +182,7 @@ export async function 글만들기(옵션 = {}) {
   if (!옵션.작업폴더) throw new Error("작업폴더 가 필요합니다");
   return 잠금으로({작업폴더: 옵션.작업폴더, 이름: "네이버-글", 일: () => 글만들기본체(옵션)});
 }
-async function 글만들기본체({작업폴더, 키워드 = "", 벤치마크URL = "", 사진수 = 3} = {}) {
+async function 글만들기본체({작업폴더, 키워드 = "", 벤치마크URL = "", 사진수 = 3, 주제 = "", 경험 = ""} = {}) {
   const 설정 = await 설정읽기(작업폴더);
   if (!String(설정.openai키 || "").startsWith("sk-")) return {결과: "설정 필요", 빠진: ["OpenAI 키"]};
   if (!키워드 && !벤치마크URL) return {결과: "키워드 필요"};
@@ -192,7 +192,7 @@ async function 글만들기본체({작업폴더, 키워드 = "", 벤치마크URL
   for (let n = 2; existsSync(저장폴더); n += 1) 저장폴더 = join(쓴글폴더(작업폴더), `${한국날짜()}_${핵심}_${n}`);
   let r;
   try {
-    r = await 글.만들기({키: 설정.openai키, 키워드: 키워드 || undefined, 벤치마크URL: 벤치마크URL || undefined, 사진수, 저장폴더});
+    r = await 글.만들기({키: 설정.openai키, 키워드: 키워드 || undefined, 벤치마크URL: 벤치마크URL || undefined, 사진수, 주제명: 주제, 경험, 저장폴더});
   } catch (e) {
     const 문구 = String(e?.message || e);
     return {결과: "실패", 할일: 처방또는프로그램(문구, {어디: "글"})};
@@ -200,7 +200,7 @@ async function 글만들기본체({작업폴더, 키워드 = "", 벤치마크URL
   let 돈 = [];
   try { 돈 = await 장부적기(작업폴더, {제목: r.제목, 사용량: r.사용량 || []}); } catch (e) { 돈 = [`(사용량 기록 실패: ${String(e?.message || e).slice(0, 60)})`]; }
   return {
-    결과: "됨", 제목: r.제목, 원고: r.원고, 사진수: r.사진수,
+    결과: "됨", 제목: r.제목, 제목후보: r.제목후보 || [r.제목], 원고: r.원고, 사진수: r.사진수,
     사진실패수: (r.사진실패 || []).length,
     사진실패할일: (r.사진실패 || []).length ? 처방또는프로그램(r.사진실패[0], {어디: "글"}) : null,
     돈,
