@@ -1571,6 +1571,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
     for (let size = Math.min(34, cleanedTitle.length); size >= 6; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
       let summary = opening(topic);
+      if (!["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"].some((phrase) => summary.includes(phrase))) summary += " 왜 그런지 함께 살펴보겠습니다.";
       for (const suffix of suffixes) {
         if ([...summary].length >= 140) break;
         if ([...summary + suffix].length <= 160) summary += suffix;
