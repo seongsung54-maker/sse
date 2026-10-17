@@ -14,7 +14,7 @@
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { 주제, 주제판별, 사진수결정, 원고작성지시 } from "./작성규칙.mjs";
+import { 주제, 주제판별, 사진수결정, 원고작성지시, 원고검증지시 } from "./작성규칙.mjs";
 
 // 고칠 때마다 올린다 (앱/배포.sh 가 커밋에 고정해 배포한다).
 export const 버전 = "2026-10-14h";
@@ -159,6 +159,23 @@ async function 스타이슈조사({ 키, 키워드 }) {
   return { 자료, 사용량: { model: 글모델, input_tokens: 조사.usage?.input_tokens || 0, output_tokens: 조사.usage?.output_tokens || 0 } };
 }
 
+
+async function 원고검증({ 키, 주제명, 조사결과, 원고 }) {
+  const 스키마 = { type: "object", additionalProperties: false, properties: {
+    통과: { type: "boolean" }, 문제: { type: "array", items: { type: "string" } }
+  }, required: ["통과", "문제"] };
+  const r = await 오픈AI(키, "/responses", {
+    model: 글모델,
+    input: [
+      { role: "developer", content: 원고검증지시({ 주제명 }) },
+      { role: "user", content: "검증된 조사 결과:\\n" + 조사결과 + "\\n\\n검증할 원고:\\n" + JSON.stringify({ 제목: 원고.제목, 제목후보: 원고.제목후보, 블록: 원고.블록 }) }
+    ],
+    text: { format: { type: "json_schema", name: "naver_draft_check", schema: 스키마, strict: true } },
+    reasoning: { effort: "low" },
+  });
+  return { 결과: JSON.parse(응답글자(r)), 사용량: { model: 글모델, input_tokens: r.usage?.input_tokens || 0, output_tokens: r.usage?.output_tokens || 0 } };
+}
+
 function 번호없는글(글) {
   return String(글 || "").replace(/^\s*\d+\s*[.)·-]\s*/, "").trim();
 }
@@ -253,6 +270,9 @@ ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_
   if (원고.제목후보.length !== 3) throw new Error("제목 후보 3개를 만들지 못했습니다.");
   if (키워드 && 원고.제목후보.some((x) => !x.startsWith(키워드))) throw new Error("제목 후보가 검색 키워드로 시작하지 않습니다.");
   원고.제목 = 원고.제목후보[0];
+  const 검증 = await 원고검증({ 키, 주제명: 선택주제, 조사결과, 원고 });
+  쓴돈.push(검증.사용량);
+  if (!검증.결과.통과) throw new Error("원고 검증을 통과하지 못했습니다: " + 검증.결과.문제.join(" / "));
   원고.블록 = 정보이미지확정({키, 제목: 원고.제목, 블록들: 원고.블록 || [], 사진수, 사용량: 쓴돈});
   Object.defineProperty(원고, "_사용량", { value: 쓴돈, enumerable: false });
   return 원고;
@@ -478,5 +498,5 @@ export async function 만들기({ 키, 벤치마크, 벤치마크URL, 키워드,
   await writeFile(path.join(폴더, "원고.md"), 읽기용, "utf8");
   기록.push({ 단계: "저장", 폴더, 원고: 원고경로, 사진: 블록.filter((b) => b.종류 === "사진").map((b) => b.파일) });
   const 사진실패 = 기록.filter((r) => /^사진\d/.test(r.단계) && r.실패).map((r) => r.실패);
-  return { 제목: 원고.제목, 폴더, 원고: 원고경로, 사진수: 블록.filter((b) => b.종류 === "사진").length, 사진실패, 사용량, 기록 };
+  return { 제목: 원고.제목, 제목후보: 원고.제목후보, 폴더, 원고: 원고경로, 사진수: 블록.filter((b) => b.종류 === "사진").length, 사진실패, 사용량, 기록 };
 }
