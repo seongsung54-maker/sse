@@ -154,7 +154,7 @@ async function 공식자료조사({ 키, 키워드 }) {
 }
 
 
-async function 스타이슈조사({ 키, 키워드 }) {
+async function 스타이슈조사({ 키, 키워드, 경험 = "" }) {
   const 스키마 = { type: "object", additionalProperties: false, properties: {
     핵심이슈: { type: "string" }, 공식확인: { type: "array", items: { type: "string" } },
     교차확인사실: { type: "array", items: { type: "string" } }, 미확인: { type: "array", items: { type: "string" } }
@@ -163,7 +163,7 @@ async function 스타이슈조사({ 키, 키워드 }) {
     model: 글모델, tools: [{ type: "web_search_preview" }],
     input: [
       { role: "developer", content: "스타·연예·방송 이슈 글의 사실 조사만 한다. 당사자·소속사·방송사·제작진의 공식 발표을 우선 확인하고, 신뢰 가능한 복수 언론 보도로 교차 검증한다. 결혼·열애·가족관계·나이·건강 등 민감한 사생활은 공식 발표 또는 복수 신뢰 보도가 일치할 때만 사실에 넣는다. 익명 관계자, 커뮤니티, 추측은 사실에 넣지 말고 미확인에 넣는다. 방송 이슈는 프로그램명·회차·방송일·선곡·점수·대결·결과·룰을 확인된 것만 정리한다." },
-      { role: "user", content: "조사 키워드: " + 키워드 + "\\n본문·제목에 써도 되는 사실과 쓰면 안 되는 미확인 내용을 분리해라." }
+      { role: "user", content: "조사 키워드: " + 키워드 + "\n사용자 제공 맥락: " + 경험 + "\n사용자 맥락에 회차·방송일·선곡·대결 상대·라이벌·룰렛·결과가 있으면, 그 조건이 일치하는 자료만 확인한다. 같은 프로그램의 다른 회차 정보는 쓰지 않는다. 각 조건을 확인하지 못하면 미확인에 넣는다.\n본문·제목에 써도 되는 사실과 쓰면 안 되는 미확인 내용을 분리해라." }
     ],
     text: { format: { type: "json_schema", name: "star_issue_facts", schema: 스키마, strict: true } },
     reasoning: { effort: "low" },
@@ -212,7 +212,7 @@ export async function 원고쓰기({ 키, 벤치마크, 키워드, 사진수 = 3
   const 선택주제 = 주제판별({ 주제명, 키워드 });
   const 정책글 = 선택주제 === 주제.정부정책;
   const 공식조사 = 정책글 ? await 공식자료조사({ 키, 키워드 }) : null;
-  const 스타조사 = !정책글 ? await 스타이슈조사({ 키, 키워드 }) : null;
+  const 스타조사 = !정책글 ? await 스타이슈조사({ 키, 키워드, 경험 }) : null;
   const 뼈대설명 = 벤치마크
     ? `아래 '벤치마크 구조' 는 참고할 글의 뼈대다. 섹션 순서와 표 · 사진 배치는 그대로 따르되, 문장은 전부 새로 써라.
 벤치마크 글의 문장을 기억하고 있더라도 절대 그대로 옮기지 마라. '문단요지' 는 어떤 내용을 다뤘는지 알기 위한 것이지 베낄 문장이 아니다. 제목도 새로 짓되 핵심 키워드는 유지한다.
