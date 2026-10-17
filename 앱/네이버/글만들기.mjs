@@ -176,6 +176,20 @@ async function 원고검증({ 키, 주제명, 조사결과, 원고 }) {
   return { 결과: JSON.parse(응답글자(r)), 사용량: { model: 글모델, input_tokens: r.usage?.input_tokens || 0, output_tokens: r.usage?.output_tokens || 0 } };
 }
 
+
+async function 원고자동수정({ 키, 주제명, 조사결과, 원고, 문제 }) {
+  const 응답 = await 오픈AI(키, "/responses", {
+    model: 글모델,
+    input: [
+      { role: "developer", content: 원고작성지시({ 주제명, 조사결과 }) + "\n[자동 수정]\n- 아래 검증 문제를 모두 고친 전체 원고를 같은 JSON 형식으로 다시 작성한다.\n- 검증되지 않은 내용을 새로 만들지 않는다. 제목후보는 정확히 3개이며 각각 본문에 직접 답이 있어야 한다." },
+      { role: "user", content: "검증 문제:\n" + 문제.join("\n") + "\n\n수정할 원고:\n" + JSON.stringify(원고) }
+    ],
+    text: { format: { type: "json_schema", name: "revised_naver_post", schema: 원고형식, strict: true } },
+    reasoning: { effort: "low" },
+  });
+  return { 원고: JSON.parse(응답글자(응답)), 사용량: { model: 글모델, input_tokens: 응답.usage?.input_tokens || 0, output_tokens: 응답.usage?.output_tokens || 0 } };
+}
+
 function 번호없는글(글) {
   return String(글 || "").replace(/^\s*\d+\s*[.)·-]\s*/, "").trim();
 }
@@ -270,9 +284,20 @@ ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_
   if (원고.제목후보.length !== 3) throw new Error("제목 후보 3개를 만들지 못했습니다.");
   if (키워드 && 원고.제목후보.some((x) => !x.startsWith(키워드))) throw new Error("제목 후보가 검색 키워드로 시작하지 않습니다.");
   원고.제목 = 원고.제목후보[0];
-  const 검증 = await 원고검증({ 키, 주제명: 선택주제, 조사결과, 원고 });
+  let 검증 = await 원고검증({ 키, 주제명: 선택주제, 조사결과, 원고 });
   쓴돈.push(검증.사용량);
-  if (!검증.결과.통과) throw new Error("원고 검증을 통과하지 못했습니다: " + 검증.결과.문제.join(" / "));
+  for (let 수정횟수 = 0; !검증.결과.통과 && 수정횟수 < 2; 수정횟수 += 1) {
+    const 수정 = await 원고자동수정({ 키, 주제명: 선택주제, 조사결과, 원고, 문제: 검증.결과.문제 });
+    쓴돈.push(수정.사용량);
+    원고 = 수정.원고;
+    원고.제목후보 = Array.isArray(원고.제목후보) ? [...new Set(원고.제목후보.map((x) => String(x).trim()).filter(Boolean))].slice(0, 3) : [];
+    if (원고.제목후보.length !== 3) throw new Error("자동 수정 뒤 제목 후보 3개를 만들지 못했습니다.");
+    if (키워드 && 원고.제목후보.some((x) => !x.startsWith(키워드))) throw new Error("자동 수정 뒤 제목 후보가 검색 키워드로 시작하지 않습니다.");
+    원고.제목 = 원고.제목후보[0];
+    검증 = await 원고검증({ 키, 주제명: 선택주제, 조사결과, 원고 });
+    쓴돈.push(검증.사용량);
+  }
+  if (!검증.결과.통과) throw new Error("자동 수정 뒤에도 원고 검증을 통과하지 못했습니다: " + 검증.결과.문제.join(" / "));
   원고.블록 = 정보이미지확정({키, 제목: 원고.제목, 블록들: 원고.블록 || [], 사진수, 사용량: 쓴돈});
   Object.defineProperty(원고, "_사용량", { value: 쓴돈, enumerable: false });
   return 원고;
