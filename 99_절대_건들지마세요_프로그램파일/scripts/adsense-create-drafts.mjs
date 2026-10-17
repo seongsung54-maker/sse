@@ -1583,6 +1583,20 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
   throw new Error("조건에 맞는 요약글을 만들지 못함");
 }
 
+function repairApprovalSummary({title, keyword, site}) {
+  const plan = summaryPlanForSite(site);
+  const situation = situationForTitle(title, site);
+  const topic = compactKoreanPhrase(title);
+  let summary = situation + " " + topic + "과 관련해 " + keyword + "는 왜 중요하고 어떻게 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 중심으로 실제 상황에서 확인할 점을 쉽게 정리합니다.";
+  const additions = [" 필요한 내용을 차근차근 살펴보겠습니다.", " 실제로 적용할 수 있게 설명하겠습니다."];
+  for (const addition of additions) {
+    if ([...summary].length >= 140) break;
+    if ([...summary + addition].length <= 160) summary += addition;
+  }
+  if ([...summary].length > 160) summary = summary.slice(0, 157).replace(/[ ,.]?$/, "") + "...";
+  return summary;
+}
+
 function summaryParagraphBlock(summary) {
   return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
 }
@@ -1670,9 +1684,16 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
   let html = normalizeArticleHtml(extractOutputText(data), title);
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   if (키워드) {
-    const summary = buildCompliantApprovalSummary({title, keyword: 키워드, site});
-    html = applyApprovalSummary(html, summary);
-    validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+    let summary;
+    try {
+      summary = buildCompliantApprovalSummary({title, keyword: 키워드, site});
+      html = applyApprovalSummary(html, summary);
+      validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+    } catch {
+      summary = repairApprovalSummary({title, keyword: 키워드, site});
+      html = applyApprovalSummary(html, summary);
+      validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+    }
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
     return {html, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
   }
