@@ -1,5 +1,5 @@
 {
-  "버전": "2026-10-18a",
+  "버전": "2026-10-18b",
   "정지": false,
   "정지안내": "",
   "커밋": "fb8ea75cc9046952620e5fc8c29d4abbbc8edf85",
@@ -34,7 +34,8 @@
     "앱/메킷애센/자료/verification.md",
     "앱/메킷애센/자료/wordpress-changes.md",
     "앱/메킷애센/자료/work-method.md",
-    "앱/승인글.mjs"
+    "앱/승인글.mjs",
+    "앱/네이버/작성규칙.mjs"
   ],
   "수강코드": [
     "weolbumakeitmiddle"
