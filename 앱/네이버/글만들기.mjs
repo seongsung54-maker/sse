@@ -218,6 +218,24 @@ async function 원고자동수정({ 키, 주제명, 조사결과, 원고, 문제
   return { 원고: JSON.parse(응답글자(응답)), 사용량: { model: 글모델, input_tokens: 응답.usage?.input_tokens || 0, output_tokens: 응답.usage?.output_tokens || 0 } };
 }
 
+async function 핵심키워드작성({ 키, 키워드, 주제명, 원고 }) {
+  const 스키마 = { type: "object", additionalProperties: false, properties: {
+    핵심키워드: { type: "array", minItems: 10, maxItems: 10, items: { type: "string" } }
+  }, required: ["핵심키워드"] };
+  const r = await 오픈AI(키, "/responses", {
+    model: 글모델,
+    input: [
+      { role: "developer", content: "네이버 글 마지막에 넣을 핵심 키워드만 만든다. 정확히 10개, 중복 없이 작성한다. 제목·본문에 실제로 나온 고유명사·사건·제도·행동만 고르고, 추측·과장·새 사실은 넣지 않는다. 해시태그, 번호, 설명 문장은 쓰지 않는다." },
+      { role: "user", content: "주제: " + 주제명 + "\n검색 키워드: " + 키워드 + "\n원고: " + JSON.stringify({ 제목: 원고.제목, 블록: 원고.블록 }) }
+    ],
+    text: { format: { type: "json_schema", name: "article_core_keywords", schema: 스키마, strict: true } },
+    reasoning: { effort: "low" },
+  });
+  const 핵심키워드 = JSON.parse(응답글자(r)).핵심키워드.map((x) => String(x).trim()).filter(Boolean);
+  if (핵심키워드.length !== 10 || new Set(핵심키워드).size !== 10) throw new Error("핵심 키워드 10개를 만들지 못했습니다.");
+  return { 핵심키워드, 사용량: { model: 글모델, input_tokens: r.usage?.input_tokens || 0, output_tokens: r.usage?.output_tokens || 0 } };
+}
+
 async function 제목후보작성({ 키, 키워드, 조사결과, 경험 = "" }) {
   const 스키마 = { type: "object", additionalProperties: false, properties: {
     제목후보: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } }
@@ -356,6 +374,10 @@ ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_
   }
   if (!검증.결과.통과) throw new Error("자동 수정 뒤에도 원고 검증을 통과하지 못했습니다: " + 검증.결과.문제.join(" / "));
   원고.블록 = 정보이미지확정({키, 제목: 원고.제목, 블록들: 원고.블록 || [], 사진수, 사용량: 쓴돈});
+  const 핵심키워드결과 = await 핵심키워드작성({ 키, 키워드, 주제명: 선택주제, 원고 });
+  쓴돈.push(핵심키워드결과.사용량);
+  원고.블록.push({ 종류: "소제목", 글: ["핵심 키워드"], 칸: [], 프롬프트: "", 이미지유형: "일러스트", 정보문구: [] });
+  원고.블록.push({ 종류: "문단", 글: [핵심키워드결과.핵심키워드.join(" · ")], 칸: [], 프롬프트: "", 이미지유형: "일러스트", 정보문구: [] });
   Object.defineProperty(원고, "_사용량", { value: 쓴돈, enumerable: false });
   return 원고;
 }
