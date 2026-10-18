@@ -221,6 +221,10 @@ async function 원고자동수정({ 키, 주제명, 조사결과, 원고, 문제
 function 번호없는글(글) {
   return String(글 || "").replace(/^\s*\d+\s*[.)·-]\s*/, "").trim();
 }
+function 소제목짧게(글) {
+  const 첫문장 = 번호없는글(글).split(/(?<=[?!。])\s+/)[0] || "";
+  return 첫문장.length <= 35 ? 첫문장 : 첫문장.slice(0, 34).replace(/[,:·\s]+$/, "") + "…";
+}
 
 export async function 원고쓰기({ 키, 벤치마크, 키워드, 사진수 = 3, 주제명 = "", 경험 = "" }) {
   const 선택주제 = 주제판별({ 주제명, 키워드 });
@@ -306,7 +310,7 @@ ${벤치마크 && 벤치마크.도입부_후킹참고 && 벤치마크.도입부_
     for (const x of 넣을곳) 원고.블록.splice(x.위치, 0, { 종류: "사진", 글: [], 칸: [], 프롬프트: x.프롬프트, 이미지유형: "일러스트", 정보문구: [] });
   }
   for (const b of 원고.블록 || []) {
-    if (b?.종류 === "소제목") b.글 = [번호없는글((b.글 || []).join(" "))];
+    if (b?.종류 === "소제목") b.글 = [소제목짧게((b.글 || []).join(" "))];
     if (b?.종류 === "문단") b.글 = [(b.글 || []).filter(Boolean).join(" ").replace(/[#|]/g, "").trim()];
   }
   원고.제목후보 = Array.isArray(원고.제목후보) ? [...new Set(원고.제목후보.map((x) => String(x).trim()).filter(Boolean))].slice(0, 3) : [];
