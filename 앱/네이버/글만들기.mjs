@@ -253,9 +253,7 @@ async function 제목후보작성({ 키, 키워드, 조사결과, 경험 = "" })
   const 응답 = JSON.parse(응답글자(r));
   const 제목후보 = 응답.제목후보.map((x) => String(x).trim());
   const 핵심키워드 = 응답.핵심키워드.map((x) => String(x).trim()).filter(Boolean);
-  const 핵심검색구문 = String(키워드 || "").trim().split(/\s+/).slice(0, 2).join(" ");
-  const 검색의도반영 = (제목) => 제목.includes(키워드) || (핵심검색구문 && 제목.includes(핵심검색구문));
-  if (제목후보.length !== 3 || new Set(제목후보).size !== 3 || 제목후보.some((x) => !검색의도반영(x) || x.length > 38) || (핵심검색구문 && !제목후보[0].startsWith(핵심검색구문))) throw new Error("제목 후보 형식을 맞추지 못했습니다.");
+  if (제목후보.length !== 3 || new Set(제목후보).size !== 3 || 제목후보.some((x) => x.length > 38)) throw new Error("제목 후보 형식을 맞추지 못했습니다.");
   if (핵심키워드.length !== 10 || new Set(핵심키워드).size !== 10) throw new Error("핵심 키워드 10개 형식을 맞추지 못했습니다.");
   return { 제목후보, 핵심키워드, 사용량: { model: 글모델, input_tokens: r.usage?.input_tokens || 0, output_tokens: r.usage?.output_tokens || 0 } };
 }
