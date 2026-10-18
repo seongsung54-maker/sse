@@ -1,8 +1,8 @@
 {
-  "버전": "2026-10-18p",
+  "버전": "2026-10-18q",
   "정지": false,
   "정지안내": "",
-  "커밋": "1ecfeb45cbea9aa5b0ea1ca39fae2e35a9d5c675",
+  "커밋": "cbcf4d1a1d5176b4ff92278ab27826e6196c1e02",
   "파일": [
     "99_절대_건들지마세요_프로그램파일/scripts/adsense-auto-drafts.mjs",
     "99_절대_건들지마세요_프로그램파일/scripts/adsense-create-drafts.mjs",
@@ -35,7 +35,8 @@
     "앱/메킷애센/자료/wordpress-changes.md",
     "앱/메킷애센/자료/work-method.md",
     "앱/승인글.mjs",
-    "앱/네이버/작성규칙.mjs"
+    "앱/네이버/작성규칙.mjs",
+    "앱/네이버/비용보호_운영규칙.md"
   ],
   "수강코드": [
     "weolbumakeitmiddle"
