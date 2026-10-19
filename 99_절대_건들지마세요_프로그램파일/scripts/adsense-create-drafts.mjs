@@ -1480,12 +1480,12 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
 
 function summaryPlanForSite(site) {
   const plans = {
-    1: {reader: "일상 물건의 역사가 궁금한 독자", outcome: "발명품의 역사와 변화를 이해하는 정보"},
-    2: {reader: "별자리 관측 입문자와 경험자", outcome: "계절별 별자리를 쉽게 관측하는 방법"},
-    3: {reader: "농업용 센서를 처음 다루는 농업인", outcome: "센서 오류 대응과 자동화 방법"},
-    4: {reader: "집단 속 내 행동이 궁금한 독자", outcome: "개인과 집단에서 다르게 행동할 때 대응하는 방법"},
-    5: {reader: "외래생물이 낯선 독자와 관찰 기록자", outcome: "주변 외래생물의 의미와 기록이 필요한 이유"},
-    6: {reader: "덴마크 여행·건축·문화에 관심 있는 독자", outcome: "여행 전에 알면 좋은 덴마크 철도와 문화 이야기"},
+    1: {guide: "발명품이 오늘의 생활로 이어진 과정을 함께 살펴볼게요."},
+    2: {guide: "계절에 맞춰 별자리를 찾는 방법을 차근차근 알아볼게요."},
+    3: {guide: "센서 수치를 살피고 오류에 대응하는 방법을 함께 정리해볼게요."},
+    4: {guide: "집단 안에서 달라질 수 있는 내 마음을 이해하는 방법을 살펴볼게요."},
+    5: {guide: "우리 주변의 외래생물을 바라보고 기록하는 이유를 함께 알아볼게요."},
+    6: {guide: "덴마크 여행에서 눈여겨볼 철도시설과 문화를 함께 살펴볼게요."},
   };
   return plans[Number(site)] || {reader: "관련 정보를 처음 확인하는 독자", outcome: "핵심을 이해하는 데 필요한 관점"};
 }
@@ -1561,9 +1561,9 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
     " 핵심을 쉬운 말로 알아보겠습니다.",
   ];
   const templates = [
-    (topic) => situation + " " + plan.reader + "라면 " + keyword + "이 " + topic + "와 어떤 관련이 있는지 왜 알아야 할까요? 이 글에서는 " + plan.outcome + "를 쉽게 정리합니다.",
-    (topic) => situation + " " + plan.reader + "에게 " + keyword + "는 " + topic + "을 이해하는 출발점이 됩니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "를 살펴봅니다.",
-    (topic) => situation + " " + plan.reader + "이 " + topic + "을 살펴볼 때 " + keyword + "의 의미를 실제 판단으로 어떻게 이어 갈 수 있을까요? 이 글에서는 " + plan.outcome + "를 정리합니다.",
+    (topic) => situation + " " + topic + "을 떠올리다 보면 " + keyword + "가 지금의 생활과 어떻게 이어졌는지 궁금해집니다. " + plan.guide,
+    (topic) => situation + " " + topic + "을 접하면 익숙한 장면 뒤에 " + keyword + "가 남긴 변화가 궁금해질 수 있어요. " + plan.guide,
+    (topic) => situation + " " + topic + "도 처음부터 지금 모습은 아니었겠지요. " + keyword + "가 어떤 흐름을 거쳐 자리 잡았는지 함께 알아봐요. " + plan.guide,
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
@@ -1587,7 +1587,7 @@ function repairApprovalSummary({title, keyword, site}) {
   const plan = summaryPlanForSite(site);
   const situation = situationForTitle(title, site);
   const topic = compactKoreanPhrase(title);
-  let summary = situation + " " + topic + "과 관련해 " + keyword + "는 왜 중요하고 어떻게 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 중심으로 실제 상황에서 확인할 점을 쉽게 정리합니다.";
+  let summary = situation + " " + topic + "을 떠올리면 " + keyword + "가 지금의 생활과 어떻게 이어졌는지 궁금해집니다. " + plan.guide;
   const additions = [" 필요한 내용을 차근차근 살펴보겠습니다.", " 실제로 적용할 수 있게 설명하겠습니다."];
   for (const addition of additions) {
     if ([...summary].length >= 140) break;
