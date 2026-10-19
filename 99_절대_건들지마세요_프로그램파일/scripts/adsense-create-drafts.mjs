@@ -1480,12 +1480,12 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
 
 function summaryPlanForSite(site) {
   const plans = {
-    1: {reader: "역사를 좋아하는 독자", outcome: "발명품의 역사성을 새롭게 보는 관점"},
-    2: {reader: "별자리 관측 입문자와 관측 경험자", outcome: "다음 관측에 적용할 준비 방법"},
-    3: {reader: "농업용 센서를 처음 쓰는 농업인", outcome: "기록으로 문제에 대응하는 방법"},
-    4: {reader: "사회생활을 하는 독자", outcome: "내 반응을 이해하고 타인과 공감하는 관점"},
-    5: {reader: "뉴스 속 외래생물과 환경에 관심 있는 독자", outcome: "주변 생태와의 연결을 보는 시선"},
-    6: {reader: "덴마크 여행·건축·디자인에 관심 있는 독자", outcome: "여행과 디자인 관점의 새 정보"},
+    1: {reader: "일상 물건의 역사가 궁금한 독자", outcome: "발명품의 역사와 변화를 이해하는 정보"},
+    2: {reader: "별자리 관측 입문자와 경험자", outcome: "계절별 별자리를 쉽게 관측하는 방법"},
+    3: {reader: "농업용 센서를 처음 다루는 농업인", outcome: "센서 오류 대응과 자동화 방법"},
+    4: {reader: "집단 속 내 행동이 궁금한 독자", outcome: "개인과 집단에서 다르게 행동할 때 대응하는 방법"},
+    5: {reader: "외래생물이 낯선 독자와 관찰 기록자", outcome: "주변 외래생물의 의미와 기록이 필요한 이유"},
+    6: {reader: "덴마크 여행·건축·문화에 관심 있는 독자", outcome: "여행 전에 알면 좋은 덴마크 철도와 문화 이야기"},
   };
   return plans[Number(site)] || {reader: "관련 정보를 처음 확인하는 독자", outcome: "핵심을 이해하는 데 필요한 관점"};
 }
@@ -1561,9 +1561,9 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
     " 핵심을 쉬운 말로 알아보겠습니다.",
   ];
   const templates = [
-    (topic) => situation + " " + topic + "에서 " + keyword + "는 무엇을 먼저 살펴봐야 할까요? 이 글에서는 " + plan.outcome + "을 얻을 수 있도록 핵심을 정리합니다.",
-    (topic) => situation + " " + keyword + "를 이해하면 " + topic + "을 바라보는 기준이 달라질 수 있습니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "을 살펴봅니다.",
-    (topic) => situation + " " + topic + "을 통해 " + keyword + "의 의미를 알면 막연한 궁금증을 실제 판단으로 어떻게 이어 갈 수 있을까요? 이 글에서는 " + plan.outcome + "을 정리합니다.",
+    (topic) => situation + " " + plan.reader + "이라면 " + topic + "에서 " + keyword + "를 왜 알아야 하는지 궁금할 수 있습니다. 이 글에서는 " + plan.outcome + "을 쉽게 정리합니다.",
+    (topic) => situation + " " + plan.reader + "에게 " + keyword + "는 " + topic + "을 이해하는 출발점이 됩니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "을 살펴봅니다.",
+    (topic) => situation + " " + plan.reader + "이 " + topic + "을 통해 " + keyword + "의 의미를 실제 판단으로 어떻게 이어 갈 수 있을까요? 이 글에서는 " + plan.outcome + "을 정리합니다.",
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
@@ -1695,7 +1695,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
       validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     }
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
-    return {html, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
+    return {html, summary, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
   }
   validateArticleHtml(html, title, {minChars: 0});
   const 글자수 = stripTags(html).replace(/\s/g, "").length;
@@ -2043,11 +2043,13 @@ for (let index = 0; index < titles.length; index += 1) {
     단계(index + 1, titles.length, "본문 쓰는 중 (보통 1~2분)");
     let html;
     let articleUsage;
+    let articleSummary = "";
     let 짧음 = false;
     for (let 시도 = 1; 시도 <= 2; 시도 += 1) {
       try {
         const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword, site});
         html = made.html;
+        articleSummary = made.summary || "";
         articleUsage = made.usage;
         짧음 = made.짧음;
         break;
@@ -2128,6 +2130,7 @@ for (let index = 0; index < titles.length; index += 1) {
       status: "draft",
       slug: post.slug || meta.slug,
       focusKeyword: meta.focusKeyword,
+      summary: articleSummary,
       featuredImageAlt: meta.featuredImageAlt,
       featuredMediaId: featuredMedia.id,
       featuredImageUrl: featuredMedia.sourceUrl,
