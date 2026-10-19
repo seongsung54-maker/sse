@@ -1567,9 +1567,9 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
     " 핵심을 쉬운 말로 알아보겠습니다.",
   ];
   const templates = [
-    (topic) => situation + " " + topic + objectParticle(topic) + " 떠올리다 보면 " + keyword + "가 지금의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide,
-    (topic) => situation + " " + topic + objectParticle(topic) + " 접하면 익숙한 장면 뒤에 " + keyword + "가 남긴 변화가 궁금해질 수 있어요. " + plan.guide,
-    (topic) => situation + " " + topic + "도 처음부터 지금 모습은 아니었겠지요. " + keyword + "가 어떤 흐름을 거쳐 자리 잡았는지 함께 알아봐요. " + plan.guide,
+    () => situation + " " + keyword + "가 오늘의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide,
+    () => situation + " " + keyword + "가 남긴 변화는 생각보다 우리 가까이에 있습니다. 왜 달라졌는지 차근차근 알아볼게요. " + plan.guide,
+    () => situation + " " + keyword + "를 따라가다 보면 지금 익숙한 모습도 처음부터 당연한 것은 아니었다는 걸 알게 됩니다. 어떻게 달라졌는지 함께 살펴볼게요. " + plan.guide,
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
@@ -1593,7 +1593,7 @@ function repairApprovalSummary({title, keyword, site}) {
   const plan = summaryPlanForSite(site);
   const situation = situationForTitle(title, site);
   const topic = compactKoreanPhrase(title);
-  let summary = situation + " " + topic + objectParticle(topic) + " 떠올리면 " + keyword + "가 지금의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide;
+  let summary = situation + " " + keyword + "가 오늘의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide;
   const additions = [" 필요한 내용을 차근차근 살펴보겠습니다.", " 실제로 적용할 수 있게 설명하겠습니다."];
   for (const addition of additions) {
     if ([...summary].length >= 140) break;
