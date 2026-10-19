@@ -1561,9 +1561,9 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
     " 핵심을 쉬운 말로 알아보겠습니다.",
   ];
   const templates = [
-    (topic) => situation + " " + plan.reader + "이라면 " + topic + "에서 " + keyword + "를 왜 알아야 하는지 궁금할 수 있습니다. 이 글에서는 " + plan.outcome + "을 쉽게 정리합니다.",
-    (topic) => situation + " " + plan.reader + "에게 " + keyword + "는 " + topic + "을 이해하는 출발점이 됩니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "을 살펴봅니다.",
-    (topic) => situation + " " + plan.reader + "이 " + topic + "을 통해 " + keyword + "의 의미를 실제 판단으로 어떻게 이어 갈 수 있을까요? 이 글에서는 " + plan.outcome + "을 정리합니다.",
+    (topic) => situation + " " + plan.reader + "라면 " + keyword + "이 " + topic + "와 어떤 관련이 있는지 왜 알아야 할까요? 이 글에서는 " + plan.outcome + "를 쉽게 정리합니다.",
+    (topic) => situation + " " + plan.reader + "에게 " + keyword + "는 " + topic + "을 이해하는 출발점이 됩니다. 어떤 점을 확인하면 좋을까요? 이 글에서 " + plan.outcome + "를 살펴봅니다.",
+    (topic) => situation + " " + plan.reader + "이 " + topic + "을 살펴볼 때 " + keyword + "의 의미를 실제 판단으로 어떻게 이어 갈 수 있을까요? 이 글에서는 " + plan.outcome + "를 정리합니다.",
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
