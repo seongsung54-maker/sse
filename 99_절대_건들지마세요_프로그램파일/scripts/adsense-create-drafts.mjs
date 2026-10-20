@@ -274,6 +274,26 @@ function normalizeArticleHtml(rawHtml, title) {
   return html.trim();
 }
 
+function validateApprovalSummaryMatch(html, summary, focusKeyword) {
+  const firstParagraph = String(html || "").match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+  const bodySummary = stripTags(firstParagraph?.[1] || "").replace(/\s+/g, " ").trim();
+  const expected = normalizeSpaces(summary);
+  if (!expected) throw new Error("채팅에 보여 줄 요약글이 비어 있음");
+  if (bodySummary !== expected) throw new Error("본문 제목 아래 요약글과 채팅 요약글이 일치하지 않음");
+  const length = [...bodySummary].length;
+  if (length < 140 || length > 160) throw new Error(`요약글 글자 수가 조건과 다름 (${length}자 / 140~160자)`);
+  if (focusKeyword && !bodySummary.includes(focusKeyword)) throw new Error("요약글에 메인키워드가 없음");
+}
+
+function validateExcerpt(excerpt, focusKeyword) {
+  const text = normalizeSpaces(stripTags(excerpt));
+  const length = [...text].length;
+  if (length < 100 || length > 140) throw new Error(`워드프레스 발췌문 글자 수가 조건과 다름 (${length}자 / 약 120자)`);
+  if (focusKeyword && !text.includes(focusKeyword)) throw new Error("워드프레스 발췌문에 메인키워드가 없음");
+  if (!/[가-힣]/.test(text)) throw new Error("워드프레스 발췌문이 한국어 문장 형식이 아님");
+  if (/[<>{}]/.test(text)) throw new Error("워드프레스 발췌문에 허용되지 않는 문자가 있음");
+}
+
 function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}) {
   if (/<h1\b/i.test(html)) throw new Error("본문에 h1 태그가 남아 있음");
   if (!/<!--\s*wp:/i.test(html)) throw new Error("본문에 Gutenberg 블록 주석이 없음");
@@ -356,7 +376,13 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}
       }
     }
   }
-}
+
+  // 같은 문단을 여러 번 붙여 넣은 원고는 저장하지 않는다.
+  const paragraphs = [...html.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((match) => comparableText(stripTags(match[1])))
+    .filter((text) => text.length >= 40);
+  const duplicateParagraph = paragraphs.find((text, index) => paragraphs.indexOf(text) !== index);
+  if (duplicateParagraph) throw new Error("본문에 같은 문단이 반복됨");
 
 function extractOutputText(data) {
   if (typeof data.output_text === "string" && data.output_text.trim()) {
@@ -1136,11 +1162,13 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = ""}) {
     "focusKeyword는 제목에서 가장 중요한 한국어 대표키워드 1개 또는 짧은 키워드구여야 한다.",
     "categoryHint는 글을 넣을 워드프레스 카테고리를 고르기 위한 한국어 주제 힌트여야 한다.",
     "imageScene은 대표이미지로 그릴 장면을 영어로 1~2문장 묘사한 것이어야 한다. 사물·상황·분위기만 쓰고, 글자·간판·문서·화면·책 등 읽을 수 있는 텍스트가 나올 만한 장면은 피한다. 사람 얼굴은 넣지 않는다.",
+    "excerpt는 워드프레스 발췌문이다. 딱딱한 설명문이 아니라 일상에서 떠올릴 수 있는 장면으로 시작하는 자연스러운 해요체 한국어 문장으로 작성한다.",
   ].join("\n");
 
   const userPrompt = [
     `글 제목: ${title}`,
     고정키워드 ? `포커스 키워드는 "${고정키워드}" 로 정해져 있다. focusKeyword 에 그대로 쓰고, excerpt 와 featuredImageAlt 에 이 문구를 자연스럽게 1회 포함해라.` : "",
+    "발췌문은 공백 포함 100~140자(약 120자)로 쓴다. 메인키워드를 반드시 1회 이상 넣고, 글의 내용을 건조하게 요약하지 말고 일상에서 공감할 수 있는 상황과 이 글에서 알게 될 내용을 자연스럽게 이어 쓴다. '독자'라는 단어와 HTML·마크다운은 쓰지 않는다.",
     "아래 JSON 형식으로만 답해.",
     "{",
     '  "slug": "semantic-english-slug",',
@@ -1183,9 +1211,11 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = ""}) {
   }
 
   const parsed = extractJsonObject(extractOutputText(data));
+  const meta = ensureMetaDefaults(parsed, title);
+  validateExcerpt(meta.excerpt, meta.focusKeyword);
 
   return {
-    meta: ensureMetaDefaults(parsed, title),
+    meta,
     usage: extractUsage(data),
   };
 }
@@ -2032,26 +2062,29 @@ for (let index = 0; index < titles.length; index += 1) {
     단계(index + 1, titles.length, "제목·키워드 정리하는 중");
     let meta = fallbackPostMeta(title);
     let metaUsage = {inputTokens: 0, outputTokens: 0, totalTokens: 0};
-    try {
-      const 이글키워드 = 대주제 && normalizeSpaces(title).includes(대주제) ? 대주제 : "";
-      const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드});
-      meta = generatedMeta.meta;
-      if (이글키워드) meta = {...meta, focusKeyword: 이글키워드};
-      metaUsage = generatedMeta.usage;
-    } catch (metaError) {
-      const message = metaError instanceof Error ? metaError.message : String(metaError);
-      console.log(`  메타 보정: ${message}`);
+
+    // 메타 발췌문이 조건에 맞지 않으면 새로 만들고, 세 번 모두 실패하면 저장하지 않는다.
+    for (let 시도 = 1; 시도 <= 3; 시도 += 1) {
+      try {
+        const 이글키워드 = 대주제 && normalizeSpaces(title).includes(대주제) ? 대주제 : "";
+        const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드});
+        meta = generatedMeta.meta;
+        if (이글키워드) meta = {...meta, focusKeyword: 이글키워드};
+        validateExcerpt(meta.excerpt, meta.focusKeyword);
+        metaUsage = generatedMeta.usage;
+        break;
+      } catch (metaError) {
+        if (시도 === 3) throw new Error(`발췌문을 세 번 고쳤지만 점검을 통과하지 못했어요: ${metaError instanceof Error ? metaError.message : String(metaError)}`);
+      }
     }
 
-    // 글이 끊기거나 점검에 걸리면 한 번만 더 만들어 본다.
-    // 두 번 다 실패하면 이 제목은 올리지 않고 넘어간다 — 반쪽짜리 글을 올리는 것보다 낫다.
-    // (다음에 다시 실행하면 이 제목부터 자동으로 다시 만든다)
+    // 글이 끊기거나 점검에 걸리면 최대 세 번 다시 만든다.
     단계(index + 1, titles.length, "본문 쓰는 중 (보통 1~2분)");
     let html;
     let articleUsage;
     let articleSummary = "";
     let 짧음 = false;
-    for (let 시도 = 1; 시도 <= 2; 시도 += 1) {
+    for (let 시도 = 1; 시도 <= 3; 시도 += 1) {
       try {
         const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword, site});
         html = made.html;
@@ -2063,13 +2096,14 @@ for (let index = 0; index < titles.length; index += 1) {
         const message = articleError instanceof Error ? articleError.message : String(articleError);
         // 키가 틀렸거나 요청 자체가 거부된 경우는 다시 해도 같다. 바로 멈춘다.
         if (/OpenAI API 실패|응답을 해석하지 못함/.test(message)) throw articleError;
-        if (시도 === 2) {
-          throw new Error(`두 번 만들어 봤지만 점검을 통과하지 못했어요: ${message}`);
+        if (시도 === 3) {
+          throw new Error(`세 번 만들어 봤지만 점검을 통과하지 못했어요: ${message}`);
         }
         console.log("  본문을 다시 쓰는 중");
       }
     }
-    // 분량이 모자라면 실패시키지 않고 이어 써서 채운다 (최대 2번). 그래도 모자라면 그대로 올린다 — 임시글은 무조건 만든다.
+    // 분량이 모자라면 이어 써서 채운다. 끝까지 조건을 못 맞추면 임시글로 저장하지 않는다.
+    let 보충실패 = "";
     for (let 보충 = 1; 보충 <= 2 && 짧음; 보충 += 1) {
       const 현재 = stripTags(html).replace(/\s/g, "").length;
       try {
@@ -2082,9 +2116,11 @@ for (let index = 0; index < titles.length; index += 1) {
       } catch (extendError) {
         const message = extendError instanceof Error ? extendError.message : String(extendError);
         if (/OpenAI API 실패|응답을 해석하지 못함/.test(message)) throw extendError;
-        break; // 보충이 안 되면 지금 본문 그대로 올린다
+        보충실패 = message;
+        break;
       }
     }
+    if (짧음) throw new Error(`본문 최소 글자 수를 맞추지 못해 임시글로 저장하지 않았어요${보충실패 ? `: ${보충실패}` : ""}`);
     const usage = mergeUsage(metaUsage, articleUsage);
     let selectedCategory = null;
     if (titleEntryHasCategory(titleEntry)) {
@@ -2100,7 +2136,9 @@ for (let index = 0; index < titles.length; index += 1) {
     단계(index + 1, titles.length, "워드프레스에 올리는 중");
     const featuredMedia = await uploadFeaturedImage({siteUrl, username, appPassword, title, meta, generatedImage});
     const htmlWithImage = insertImageBlockIntoArticle(html, buildArticleImageBlock({media: featuredMedia}));
-    validateArticleHtml(htmlWithImage, title, {focusKeyword: meta.focusKeyword});
+    validateArticleHtml(htmlWithImage, title, {minChars, focusKeyword: meta.focusKeyword});
+    validateApprovalSummaryMatch(htmlWithImage, articleSummary, meta.focusKeyword);
+    validateExcerpt(meta.excerpt, meta.focusKeyword);
     validateInlineImageBlock(htmlWithImage, featuredMedia);
     const localPath = join(outputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
     const visiblePath = join(visibleOutputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
