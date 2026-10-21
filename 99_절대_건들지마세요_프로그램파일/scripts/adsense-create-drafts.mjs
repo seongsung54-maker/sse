@@ -321,9 +321,8 @@ function validateHumanVoice(text, label) {
 }
 
 function repairExcerptVoice(excerpt, title) {
-  const topic = titleContentKeywords(title, "").find((word) => word.length >= 2) || "핵심 내용";
   return normalizeSpaces(String(excerpt || ""))
-    .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, `${topic}의 흐름을 짚어봅니다`);
+    .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, "들여다봅니다");
 }
 
 function validateExcerpt(excerpt, focusKeyword, title = "") {
