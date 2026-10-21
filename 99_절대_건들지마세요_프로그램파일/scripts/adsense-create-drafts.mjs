@@ -323,8 +323,12 @@ function validateHumanVoice(text, label) {
 function repairExcerptVoice(excerpt, title) {
   let text = normalizeSpaces(String(excerpt || ""))
     .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, "들여다봅니다");
-  if ([...text].length < 100) {
-    const addition = " 이 글에서 중요한 흐름도 짚어봅니다.";
+  const additions = [
+    " 이 글에서 중요한 흐름도 짚어봅니다.",
+    " 오늘의 생활과 이어지는 이유도 생각해 봅니다.",
+  ];
+  for (const addition of additions) {
+    if ([...text].length >= 100) break;
     if ([...text + addition].length <= 140) text += addition;
   }
   return text;
