@@ -2156,49 +2156,41 @@ for (let index = 0; index < titles.length; index += 1) {
       }
     }
 
-    // 글이 끊기거나 점검에 걸리면 최대 세 번 다시 만든다.
+    // 최초 원고는 한 번만 만든다. 이후에는 같은 원고의 오류 부분만 고쳐 세 번까지 재검사한다.
     단계(index + 1, titles.length, "본문 쓰는 중 (보통 1~2분)");
-    let html;
-    let articleUsage;
-    let articleSummary = "";
-    let 짧음 = false;
-    for (let 시도 = 1; 시도 <= 3; 시도 += 1) {
+    const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword, site});
+    let html = made.html;
+    let articleUsage = made.usage;
+    let articleSummary = made.summary || "";
+    let 통과 = false;
+    let 마지막오류 = "";
+
+    for (let 수정시도 = 1; 수정시도 <= 3; 수정시도 += 1) {
       try {
-        const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword, site});
-        html = made.html;
-        articleSummary = made.summary || "";
-        articleUsage = made.usage;
-        짧음 = made.짧음;
-        break;
-      } catch (articleError) {
-        const message = articleError instanceof Error ? articleError.message : String(articleError);
-        // 키가 틀렸거나 요청 자체가 거부된 경우는 다시 해도 같다. 바로 멈춘다.
-        if (/OpenAI API 실패|응답을 해석하지 못함/.test(message)) throw articleError;
-        if (시도 === 3) {
-          throw new Error(`세 번 만들어 봤지만 점검을 통과하지 못했어요: ${message}`);
+        // API 호출 없이 해결 가능한 서식·반복·소제목 오류를 먼저 고친다.
+        html = repairDraftCandidate(html, title, meta.focusKeyword);
+
+        const 현재글자수 = stripTags(html).replace(/\s/g, "").length;
+        if (현재글자수 < minChars) {
+          const 더 = await extendArticle({apiKey: env.OPENAI_API_KEY, model, title, html, 부족자수: minChars - 현재글자수});
+          html = repairDraftCandidate(`${html.trim()}\n\n${더.추가}`, title, meta.focusKeyword);
+          articleUsage = mergeUsage(articleUsage, 더.usage);
         }
-        console.log("  본문을 다시 쓰는 중");
-      }
-    }
-    // 분량이 모자라면 이어 써서 채운다. 끝까지 조건을 못 맞추면 임시글로 저장하지 않는다.
-    let 보충실패 = "";
-    for (let 보충 = 1; 보충 <= 2 && 짧음; 보충 += 1) {
-      const 현재 = stripTags(html).replace(/\s/g, "").length;
-      try {
-        const 더 = await extendArticle({apiKey: env.OPENAI_API_KEY, model, title, html, 부족자수: minChars - 현재});
-        const 합침 = repairDraftCandidate(`${html.trim()}\n\n${더.추가}`, title, meta.focusKeyword);
-        validateArticleHtml(합침, title, {minChars: 0, focusKeyword: meta.focusKeyword}); // 표·끊긴 태그 검사만 (분량은 따지지 않는다)
-        html = 합침;
-        articleUsage = mergeUsage(articleUsage, 더.usage);
-        짧음 = stripTags(html).replace(/\s/g, "").length < minChars;
-      } catch (extendError) {
-        const message = extendError instanceof Error ? extendError.message : String(extendError);
-        if (/OpenAI API 실패|응답을 해석하지 못함/.test(message)) throw extendError;
-        보충실패 = message;
+
+        validateArticleHtml(html, title, {minChars, focusKeyword: meta.focusKeyword});
+        validateApprovalSummaryMatch(html, articleSummary, meta.focusKeyword);
+        validateExcerpt(meta.excerpt, meta.focusKeyword, title);
+        통과 = true;
         break;
+      } catch (repairError) {
+        마지막오류 = repairError instanceof Error ? repairError.message : String(repairError);
+        if (수정시도 < 3) console.log(`  규칙 오류를 고쳐 다시 점검하는 중 (${수정시도}/3)`);
       }
     }
-    if (짧음) throw new Error(`본문 최소 글자 수를 맞추지 못해 임시글로 저장하지 않았어요${보충실패 ? `: ${보충실패}` : ""}`);
+
+    if (!통과) {
+      throw new Error(`같은 원고를 세 번 수정·점검했지만 통과하지 못해 임시글로 저장하지 않았어요: ${마지막오류}`);
+    }
     const usage = mergeUsage(metaUsage, articleUsage);
     let selectedCategory = null;
     if (titleEntryHasCategory(titleEntry)) {
