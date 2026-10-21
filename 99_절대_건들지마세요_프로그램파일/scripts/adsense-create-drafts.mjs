@@ -1894,12 +1894,12 @@ async function extendArticle({apiKey, model, title, html, 부족자수}) {
   return {추가, usage: extractUsage(data)};
 }
 
-async function createDraftPost({siteUrl, username, appPassword, title, html, date, meta, featuredMediaId, selectedCategory}) {
+async function createDraftPost({siteUrl, username, appPassword, title, html, date, meta, featuredMediaId, selectedCategory, postStatus = "draft"}) {
   const credentials = wordpressCredentials(username, appPassword);
   const payload = {
     title,
     content: html,
-    status: "draft",
+    status: postStatus,
     slug: meta.slug,
     excerpt: meta.excerpt,
   };
@@ -1928,7 +1928,7 @@ async function createDraftPost({siteUrl, username, appPassword, title, html, dat
 
   if (!response.ok) {
     const message = data.message || body.slice(0, 300);
-    throw new Error(`워드프레스 임시글 생성 실패: ${message}`);
+    throw new Error(`워드프레스 글 생성 실패: ${message}`);
   }
 
   return data;
@@ -2012,6 +2012,7 @@ const site = Number(argValue("site", "1"));
 const limit = Number(argValue("limit", "0"));
 const includeUsedTitles = ["1", "true", "yes"].includes(argValue("include-used", "0").toLowerCase());
 const dryRun = ["1", "true", "yes"].includes(argValue("dry-run", "0").toLowerCase());
+const publish = ["1", "true", "yes", "publish"].includes(argValue("publish", "0").toLowerCase());
 const prefix = sitePrefix(site);
 const model = env.ARTICLE_MODEL || "gpt-5.4-mini";
 const minChars = Number(env.ARTICLE_MIN_CHARS || 3000);
@@ -2260,13 +2261,22 @@ for (let index = 0; index < titles.length; index += 1) {
     writeFileSync(visiblePath, htmlWithImage, "utf8");
 
     const postDate = postDateForIndex(index + dateOffset, dateMode, startDate, {randomDays, fixedTime, stepDays, hourGap, perDay, minGapHours, 피할시각들: 잡힌시각들, slotStartTime, slotGapMinutes});
-    if (postDate) 잡힌시각들.push(Date.parse(postDate)); // 이번 실행에서 잡은 시각도 다음 글이 피하게
-    let post = await createDraftPost({siteUrl, username, appPassword, title, html: htmlWithImage, date: postDate, meta, featuredMediaId: featuredMedia.id, selectedCategory});
+    const postStatus = publish ? "publish" : "draft";
+    // 공개 발행은 예약 날짜를 보내지 않아, 검증을 통과한 즉시 실제 공개된다.
+    const savedDate = publish ? null : postDate;
+    if (savedDate) 잡힌시각들.push(Date.parse(savedDate)); // 이번 실행에서 잡은 시각도 다음 글이 피하게
+    let post = await createDraftPost({siteUrl, username, appPassword, title, html: htmlWithImage, date: savedDate, meta, featuredMediaId: featuredMedia.id, selectedCategory, postStatus});
+    if (post.status !== postStatus) {
+      throw new Error(`워드프레스 글 상태 확인 실패: 요청 ${postStatus}, 응답 ${post.status || "없음"}`);
+    }
     if (!postHasInlineImage(post, featuredMedia)) {
       post = await updateDraftPostContent({siteUrl, username, appPassword, postId: post.id, html: htmlWithImage, featuredMediaId: featuredMedia.id, selectedCategory});
     }
     if (!postHasInlineImage(post, featuredMedia)) {
-      throw new Error("워드프레스 임시글 본문에 이미지 블록이 저장되지 않았습니다.");
+      throw new Error("워드프레스 글 본문에 이미지 블록이 저장되지 않았습니다.");
+    }
+    if (post.status !== postStatus) {
+      throw new Error(`워드프레스 글 상태 확인 실패: 요청 ${postStatus}, 응답 ${post.status || "없음"}`);
     }
 
     // 랭크매스 포커스 키워드. 없는 사이트면 조용히 건너뛰되, 화면에는 왜 안 됐는지 남긴다.
@@ -2284,8 +2294,8 @@ for (let index = 0; index < titles.length; index += 1) {
       title,
       ok: true,
       postId: post.id,
-      date: post.date || postDate,
-      status: "draft",
+      date: post.date || savedDate || new Date().toISOString(),
+      status: post.status || postStatus,
       slug: post.slug || meta.slug,
       focusKeyword: meta.focusKeyword,
       summary: articleSummary,
@@ -2343,7 +2353,7 @@ for (let index = 0; index < titles.length; index += 1) {
       console.log(`     (사용량 기록 실패: ${ledgerError instanceof Error ? ledgerError.message : String(ledgerError)})`);
     }
     console.log(`  ✅ 완료 · 이 글 약 ${estimatedKrw}원 · 지금까지 ${지금까지완료}개 · 약 ${Math.round(지금까지비용)}원`);
-    console.log(`     (임시글 ID ${post.id} / 키워드 ${meta.focusKeyword}${categoryLabel} / 날짜 ${post.date || postDate || "기본값"})`);
+    console.log(`     (${postStatus === "publish" ? "공개 글" : "임시글"} ID ${post.id} / 키워드 ${meta.focusKeyword}${categoryLabel} / 날짜 ${post.date || savedDate || "기본값"})`);
     const [돈1, 돈2] = 돈줄({이글, 이번실행, 예산});
     console.log(돈1);
     console.log(돈2);
@@ -2417,7 +2427,7 @@ console.log("");
 console.log("============================================");
 if (success > 0) {
   console.log(`  ✅ 다 됐어요! 새 글 ${success}개를 저장했어요`);
-  console.log("     워드프레스 임시글에 들어 있어요. 글을 확인한 뒤 발행하세요");
+  console.log(publish ? "     워드프레스에 공개 발행했어요." : "     워드프레스 임시글에 들어 있어요. 글을 확인한 뒤 발행하세요");
   console.log(`     이번에 든 돈: 약 ${Math.round(costSummary.estimated_krw)}원 · 토큰 ${천단위(costSummary.total_tokens)}개 (글 1개 평균 약 ${천단위(costSummary.estimated_krw / success)}원, 토큰 ${천단위(costSummary.total_tokens / success)}개)`);
   if (예산.있음) {
     console.log(`     💰 충전액 ${천단위(예산.예산krw)}원 중 ${퍼센트문구(퍼센트(costSummary.estimated_usd, 예산.예산usd))} 를 이번에 씀 · 지금까지 ${예산.쓴글수}개 · 약 ${천단위(예산.쓴krw)}원 (${퍼센트문구(예산.쓴퍼센트)})`);
