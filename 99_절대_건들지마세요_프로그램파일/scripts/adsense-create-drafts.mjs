@@ -383,6 +383,7 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}
     .filter((text) => text.length >= 40);
   const duplicateParagraph = paragraphs.find((text, index) => paragraphs.indexOf(text) !== index);
   if (duplicateParagraph) throw new Error("본문에 같은 문단이 반복됨");
+}
 
 function extractOutputText(data) {
   if (typeof data.output_text === "string" && data.output_text.trim()) {
