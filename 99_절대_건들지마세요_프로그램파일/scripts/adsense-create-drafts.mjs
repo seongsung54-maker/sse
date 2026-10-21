@@ -320,6 +320,12 @@ function validateHumanVoice(text, label) {
   }
 }
 
+function repairExcerptVoice(excerpt, title) {
+  const topic = titleContentKeywords(title, "").find((word) => word.length >= 2) || "핵심 내용";
+  return normalizeSpaces(String(excerpt || ""))
+    .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, `${topic}의 흐름을 짚어봅니다`);
+}
+
 function validateExcerpt(excerpt, focusKeyword, title = "") {
   const text = normalizeSpaces(stripTags(excerpt));
   validateHumanVoice(text, "워드프레스 발췌문");
@@ -2176,6 +2182,7 @@ for (let index = 0; index < titles.length; index += 1) {
         const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드, site});
         meta = generatedMeta.meta;
         if (이글키워드) meta = {...meta, focusKeyword: 이글키워드};
+        meta = {...meta, excerpt: repairExcerptVoice(meta.excerpt, title)};
         validateExcerpt(meta.excerpt, meta.focusKeyword, title);
         metaUsage = generatedMeta.usage;
         break;
