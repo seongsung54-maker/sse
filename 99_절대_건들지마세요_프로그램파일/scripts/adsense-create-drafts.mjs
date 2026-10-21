@@ -2262,11 +2262,13 @@ for (let index = 0; index < titles.length; index += 1) {
 
     const postDate = postDateForIndex(index + dateOffset, dateMode, startDate, {randomDays, fixedTime, stepDays, hourGap, perDay, minGapHours, 피할시각들: 잡힌시각들, slotStartTime, slotGapMinutes});
     const postStatus = publish ? "publish" : "draft";
-    // 공개 발행은 예약 날짜를 보내지 않아, 검증을 통과한 즉시 실제 공개된다.
-    const savedDate = publish ? null : postDate;
+    // 두 저장 모드 모두 사이트별 발행 날짜와 시간을 보존한다.
+    // 공개 발행은 미래 시각이면 WordPress가 future(예약 공개)로, 현재·과거 시각이면 publish로 응답한다.
+    const savedDate = postDate;
     if (savedDate) 잡힌시각들.push(Date.parse(savedDate)); // 이번 실행에서 잡은 시각도 다음 글이 피하게
+    const allowedPostStatuses = publish ? new Set(["publish", "future"]) : new Set(["draft"]);
     let post = await createDraftPost({siteUrl, username, appPassword, title, html: htmlWithImage, date: savedDate, meta, featuredMediaId: featuredMedia.id, selectedCategory, postStatus});
-    if (post.status !== postStatus) {
+    if (!allowedPostStatuses.has(post.status)) {
       throw new Error(`워드프레스 글 상태 확인 실패: 요청 ${postStatus}, 응답 ${post.status || "없음"}`);
     }
     if (!postHasInlineImage(post, featuredMedia)) {
@@ -2275,7 +2277,7 @@ for (let index = 0; index < titles.length; index += 1) {
     if (!postHasInlineImage(post, featuredMedia)) {
       throw new Error("워드프레스 글 본문에 이미지 블록이 저장되지 않았습니다.");
     }
-    if (post.status !== postStatus) {
+    if (!allowedPostStatuses.has(post.status)) {
       throw new Error(`워드프레스 글 상태 확인 실패: 요청 ${postStatus}, 응답 ${post.status || "없음"}`);
     }
 
@@ -2427,7 +2429,7 @@ console.log("");
 console.log("============================================");
 if (success > 0) {
   console.log(`  ✅ 다 됐어요! 새 글 ${success}개를 저장했어요`);
-  console.log(publish ? "     워드프레스에 공개 발행했어요." : "     워드프레스 임시글에 들어 있어요. 글을 확인한 뒤 발행하세요");
+  console.log(publish ? "     워드프레스에 공개 글 또는 예약 공개 글로 저장했어요." : "     워드프레스 임시글에 들어 있어요. 글을 확인한 뒤 발행하세요");
   console.log(`     이번에 든 돈: 약 ${Math.round(costSummary.estimated_krw)}원 · 토큰 ${천단위(costSummary.total_tokens)}개 (글 1개 평균 약 ${천단위(costSummary.estimated_krw / success)}원, 토큰 ${천단위(costSummary.total_tokens / success)}개)`);
   if (예산.있음) {
     console.log(`     💰 충전액 ${천단위(예산.예산krw)}원 중 ${퍼센트문구(퍼센트(costSummary.estimated_usd, 예산.예산usd))} 를 이번에 씀 · 지금까지 ${예산.쓴글수}개 · 약 ${천단위(예산.쓴krw)}원 (${퍼센트문구(예산.쓴퍼센트)})`);
