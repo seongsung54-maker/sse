@@ -199,6 +199,12 @@ nodeRepl.write(JSON.stringify(await 앱.승인글.제목추가({ 작업폴더, �
 
 사이트 1번부터 차례로, 각 사이트에서 개수만큼 아래를 반복한다. 제목이 없는 사이트는 건너뛴다.
 
+임시글:
+```js
+nodeRepl.write(JSON.stringify(await 앱.승인글.글만들기({ 작업폴더, 사이트: «사이트번호», 개수: 1 }), null, 1));
+```
+
+공개글:
 ```js
 nodeRepl.write(JSON.stringify(await 앱.승인글.글만들기({ 작업폴더, 사이트: «사이트번호», 개수: 1, 공개발행: true }), null, 1));
 ```
