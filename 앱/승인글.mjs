@@ -459,7 +459,7 @@ export async function 글만들기(옵션 = {}) {
   return 잠금으로({작업폴더: 옵션.작업폴더, 이름: `승인글-사이트${Number(옵션.사이트) || 1}`, 일: () => 글만들기본체(옵션)});
 }
 
-async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날짜모드 = "", 시작날짜 = "", 무작위일수 = 0, 시간간격 = 0, 하루개수 = 0, 최소간격시간 = 0, 시작시각 = "", 간격분 = 0}) {
+async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날짜모드 = "", 시작날짜 = "", 무작위일수 = 0, 시간간격 = 0, 하루개수 = 0, 최소간격시간 = 0, 시작시각 = "", 간격분 = 0, 공개발행 = false}) {
   const 설정 = await 설정읽기(작업폴더);
   const 빠진 = [];
   if (!설정.수강코드) 빠진.push("수강 코드");
@@ -470,6 +470,8 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
   if (앞상태.남은수 === 0) return {결과: "제목 없음", ...앞상태};
 
   const argv = ["--site=" + 사이트, "--limit=" + 개수];
+  const 공개모드 = 공개발행 === true;
+  if (공개모드) argv.push("--publish=1");
   const 리듬 = 발행리듬(사이트);
   const 적용시작시각 = String(시작시각 || 리듬.시작시각);
   const 적용간격분 = Math.max(1, Number(간격분 || 리듬.간격분) || 리듬.간격분);
@@ -512,7 +514,7 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
     이번글 = (Array.isArray(rows) ? rows : []).filter((x) => x && x.ok && !x.skipped).map((x) => {
       const d = x.date ? new Date(x.date) : null;
       const 날짜 = d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : String(x.date || "");
-      return {제목: x.title, 요약글: x.summary || "", 발행날짜: 날짜, 상태: "임시글", 링크: x.editLink || ""};
+      return {제목: x.title, 요약글: x.summary || "", 발행날짜: 날짜, 상태: x.status === "publish" ? "공개 발행" : "임시글", 링크: x.editLink || ""};
     });
   } catch {}
   let 결과 = "됨";
@@ -534,7 +536,7 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
     이번글,
     남은제목: 뒤상태.남은수,
     지금까지만든수: 뒤상태.만든수,
-    다음: 뒤상태.남은수 > 0 ? `앱.승인글.글만들기({ 작업폴더, 사이트: ${사이트}, 개수: 1 })` : "",
+    다음: 뒤상태.남은수 > 0 ? `앱.승인글.글만들기({ 작업폴더, 사이트: ${사이트}, 개수: 1${공개모드 ? ", 공개발행: true" : ""} })` : "",
     화면: 마지막줄들(r.출력, 40),
   };
 }
