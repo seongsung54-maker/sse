@@ -1,8 +1,8 @@
 {
-  "버전": "2026-10-21f",
+  "버전": "2026-10-21g",
   "정지": false,
   "정지안내": "",
-  "커밋": "c7935ea07234fc5b701ec6a2d969d82c530e7039",
+  "커밋": "42a4ea7b31b69b4ee9db3100a12160096eafdf77",
   "파일": [
     "99_절대_건들지마세요_프로그램파일/scripts/adsense-auto-drafts.mjs",
     "99_절대_건들지마세요_프로그램파일/scripts/adsense-create-drafts.mjs",
