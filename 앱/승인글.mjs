@@ -514,7 +514,7 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
     이번글 = (Array.isArray(rows) ? rows : []).filter((x) => x && x.ok && !x.skipped).map((x) => {
       const d = x.date ? new Date(x.date) : null;
       const 날짜 = d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : String(x.date || "");
-      return {제목: x.title, 요약글: x.summary || "", 발행날짜: 날짜, 상태: x.status === "publish" ? "공개 발행" : "임시글", 링크: x.editLink || ""};
+      return {제목: x.title, 요약글: x.summary || "", 발행날짜: 날짜, 상태: x.status === "publish" ? "공개 발행" : x.status === "future" ? "예약 공개" : "임시글", 링크: x.editLink || ""};
     });
   } catch {}
   let 결과 = "됨";
