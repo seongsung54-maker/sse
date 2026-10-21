@@ -1266,7 +1266,9 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = "", sit
   }
 
   const parsed = extractJsonObject(extractOutputText(data));
-  const meta = ensureMetaDefaults(parsed, title);
+  const generatedMeta = ensureMetaDefaults(parsed, title);
+  // 생성 결과가 조금 짧아도 먼저 보완한 뒤 검사해야 재시도 비용을 줄일 수 있다.
+  const meta = {...generatedMeta, excerpt: repairExcerptVoice(generatedMeta.excerpt, title)};
   validateExcerpt(meta.excerpt, meta.focusKeyword, title);
 
   return {
