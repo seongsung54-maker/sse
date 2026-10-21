@@ -1681,30 +1681,27 @@ function summaryParagraphBlock(summary) {
 function repairDraftCandidate(html, title, focusKeyword = "") {
   let repaired = String(html || "");
   if (focusKeyword) {
-    const escapedKeyword = focusKeyword.replace(/[.*+?^$ {}()|[\\]\\\\]/g, "\\function summaryParagraphBlock(summary) {
-  return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
-}
-");
-    const boldKeyword = new RegExp("<(?:strong|b)\\\\b[^>]*>\\\\s*(" + escapedKeyword + ")\\\\s*</(?:strong|b)>", "gi");
+    const escapedKeyword = focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const boldKeyword = new RegExp("<(?:strong|b)\\b[^>]*>\\s*(" + escapedKeyword + ")\\s*</(?:strong|b)>", "gi");
     repaired = repaired.replace(boldKeyword, "$1");
   }
   const seenParagraphs = new Set();
-  repaired = repaired.replace(/<!--\\s*wp:paragraph\\s*-->\\s*<p\\b[^>]*>[\\s\\S]*?<\\/p>\\s*<!--\\s*\\/wp:paragraph\\s*-->/gi, (block) => {
+  repaired = repaired.replace(/<!--\s*wp:paragraph\s*-->\s*<p\b[^>]*>[\s\S]*?<\/p>\s*<!--\s*\/wp:paragraph\s*-->/gi, (block) => {
     const text = comparableText(stripTags(block));
     if (text.length >= 40 && seenParagraphs.has(text)) return "";
     if (text.length >= 40) seenParagraphs.add(text);
     return block;
   });
-  const headings = [...repaired.matchAll(/<h[23]\\b[^>]*>([\\s\\S]*?)<\\/h[23]>/gi)];
+  const headings = [...repaired.matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)];
   const finalHeading = headings.at(-1);
   if (finalHeading) {
-    const finalText = stripTags(finalHeading[1]).replace(/\\s+/g, " ").trim();
+    const finalText = stripTags(finalHeading[1]).replace(/\s+/g, " ").trim();
     if (finalText.includes("마무리") || !/(핵심|기억|포인트|정리)/.test(finalText)) {
-      const tag = /^<h([23])\\b/i.exec(finalHeading[0])?.[1] || "2";
+      const tag = /^<h([23])\b/i.exec(finalHeading[0])?.[1] || "2";
       repaired = repaired.slice(0, finalHeading.index) + "<h" + tag + ">이 글에서 기억할 핵심 포인트</h" + tag + ">" + repaired.slice(finalHeading.index + finalHeading[0].length);
     }
   } else {
-    repaired += "\\n\\n<!-- wp:heading -->\\n<h2>이 글에서 기억할 핵심 포인트</h2>\\n<!-- /wp:heading -->\\n\\n<!-- wp:paragraph -->\\n<p>" + escapeHtml(title) + "를 이해할 때는 변화의 흐름과 오늘의 생활에 이어진 의미를 함께 살피는 것이 중요합니다.</p>\\n<!-- /wp:paragraph -->";
+    repaired += "\n\n<!-- wp:heading -->\n<h2>이 글에서 기억할 핵심 포인트</h2>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>" + escapeHtml(title) + "를 이해할 때는 변화의 흐름과 오늘의 생활에 이어진 의미를 함께 살피는 것이 중요합니다.</p>\n<!-- /wp:paragraph -->";
   }
   return repaired.trim();
 }
