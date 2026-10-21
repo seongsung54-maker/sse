@@ -26,6 +26,19 @@ function argValue(name, fallback = "") {
   return hit ? hit.slice(prefix.length) : fallback;
 }
 
+function siteVoiceGuide(site) {
+  const voices = {
+    1: "화자: 일상 물건의 뒷이야기를 들려주는 사람. 친근한 해요체를 주로 쓰고, 익숙한 물건·장면에서 호기심을 시작한다. 확인할 수 없는 개인 경험은 꾸며내지 않는다.",
+    2: "화자: 밤하늘을 함께 올려다보는 관측 동행자. 친근한 해요체를 주로 쓰고, 관찰 장면과 가벼운 질문으로 별자리를 찾는 방법을 안내한다.",
+    3: "화자: 농장 현장을 아는 실용 안내자. 담백한 합쇼체를 주로 쓰고, 수치·조건·점검 순서를 짧고 분명하게 제시한다. 친근한 말투는 도입과 주의 문장에만 가볍게 쓴다.",
+    4: "화자: 집단 안의 내 행동을 차분히 돌아보게 하는 해설자. 합쇼체와 해요체를 섞되, 일상 상황 뒤에 생각할 질문을 연결한다.",
+    5: "화자: 주변 생물을 관찰하고 기록하는 사람. 관찰 장면에서 시작해 사실을 설명하고, 기록이 왜 필요한지 차분한 해설과 친근한 질문으로 잇는다.",
+    6: "화자: 덴마크를 함께 여행하며 공간과 문화를 들려주는 동행자. 친근한 해요체를 주로 쓰고, 역·이동·거리의 장면에서 이야기를 시작한다.",
+  };
+  return voices[Number(site)] || "화자: 생활 속 궁금증을 쉽게 풀어 주는 정보성 블로거. 짧은 문단과 한 가지 분명한 말투를 유지한다.";
+}
+
+
 function ready(value, placeholders = []) {
   if (!value) return false;
   const lowered = value.toLowerCase();
@@ -301,8 +314,15 @@ function validateTitleKeywordConnection(text, title, focusKeyword, label) {
   }
 }
 
+function validateHumanVoice(text, label) {
+  if (/(자연스럽게\s*(알아|살펴|정리)|쉽게\s*(알아|살펴|정리))/u.test(normalizeSpaces(text))) {
+    throw new Error(`${label}에 작성 방식을 설명하는 틀 문장이 있음`);
+  }
+}
+
 function validateExcerpt(excerpt, focusKeyword, title = "") {
   const text = normalizeSpaces(stripTags(excerpt));
+  validateHumanVoice(text, "워드프레스 발췌문");
   const length = [...text].length;
   if (length < 100 || length > 140) throw new Error(`워드프레스 발췌문 글자 수가 조건과 다름 (${length}자 / 약 120자)`);
   if (focusKeyword && !text.includes(focusKeyword)) throw new Error("워드프레스 발췌문에 메인키워드가 없음");
@@ -1171,7 +1191,7 @@ async function fetchWordPressCategories({siteUrl, username, appPassword}) {
   return collected;
 }
 
-async function generatePostMeta({apiKey, model, title, 고정키워드 = ""}) {
+async function generatePostMeta({apiKey, model, title, 고정키워드 = "", site = 0}) {
   const systemPrompt = [
     "너는 한국어 글 제목을 보고 워드프레스 발행 메타를 만드는 편집자다.",
     "반드시 JSON 객체만 출력한다. 설명, 코드블록, 마크다운은 출력하지 않는다.",
@@ -1185,6 +1205,8 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = ""}) {
 
   const userPrompt = [
     `글 제목: ${title}`,
+    `사이트별 말투: ${siteVoiceGuide(site)}`,
+    "발췌문은 본문·요약글과 같은 화자가 말하는 것처럼 작성한다. '자연스럽게 알아봅니다', '쉽게 살펴봅니다'처럼 작성 방식을 설명하는 틀 문장은 쓰지 않는다.",
     고정키워드 ? `포커스 키워드는 "${고정키워드}" 로 정해져 있다. focusKeyword 에 그대로 쓰고, excerpt 와 featuredImageAlt 에 이 문구를 자연스럽게 1회 포함해라.` : "",
     "발췌문은 공백 포함 100~140자(약 120자)로 쓴다. 메인키워드를 반드시 1회 이상 넣고, 글의 내용을 건조하게 요약하지 말고 일상에서 공감할 수 있는 상황과 이 글에서 알게 될 내용을 자연스럽게 이어 쓴다. '독자'라는 단어와 HTML·마크다운은 쓰지 않는다.",
     "아래 JSON 형식으로만 답해.",
@@ -1507,7 +1529,9 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0}
             `첫 문장은 ${situationForTitle(title, site)}처럼 제목 주제와 연결된 생활 장면에서 시작한다.`,
             "제목에 들어 있는 구체적인 핵심 키워드를 1개 이상 문장에 그대로 넣는다. 제목 일부를 어색하게 자르거나 조사만 덧붙이지 않는다.",
             `메인키워드 "${keyword}"를 문장 안에 1회 이상 그대로 넣는다.`,
+            `사이트별 화자 말투: ${siteVoiceGuide(site)}`,
             "왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나를 자연스럽게 포함한다.",
+            "'자연스럽게 알아봅니다', '쉽게 살펴봅니다'처럼 글쓰기 방식을 설명하는 말은 쓰지 말고, 제목의 구체적인 내용과 이 글에서 알게 될 점을 말한다.",
           ].join("\n")},
         ],
         max_output_tokens: 300,
@@ -1546,12 +1570,12 @@ function subjectParticle(word) {
 
 function summaryPlanForSite(site) {
   const plans = {
-    1: {guide: "발명품이 오늘의 생활로 이어진 과정을 함께 살펴볼게요."},
-    2: {guide: "계절에 맞춰 별자리를 찾는 방법을 차근차근 알아볼게요."},
-    3: {guide: "센서 수치를 살피고 오류에 대응하는 방법을 함께 정리해볼게요."},
-    4: {guide: "집단 안에서 달라질 수 있는 내 마음을 이해하는 방법을 살펴볼게요."},
-    5: {guide: "우리 주변의 외래생물을 바라보고 기록하는 이유를 함께 알아볼게요."},
-    6: {guide: "덴마크 여행에서 눈여겨볼 철도시설과 문화를 함께 살펴볼게요."},
+    1: {guide: "익숙한 물건이 만들어진 배경과 원리를 짚어볼게요."},
+    2: {guide: "그 계절에 별자리를 찾는 기준을 알려드릴게요."},
+    3: {guide: "먼저 확인할 센서 수치와 대응 순서를 정리합니다."},
+    4: {guide: "그 순간 내 판단이 어떻게 흔들리는지 생각해 볼게요."},
+    5: {guide: "발견한 생물을 기록할 때 무엇을 살펴야 하는지 짚어볼게요."},
+    6: {guide: "이동할 때 보이는 철도시설의 의미를 들려드릴게요."},
   };
   return plans[Number(site)] || {reader: "관련 정보를 처음 확인하는 독자", outcome: "핵심을 이해하는 데 필요한 관점"};
 }
@@ -1619,6 +1643,7 @@ function situationForTitle(title, site) {
 
 function validateApprovalSummaryStyle(summary) {
   const text = normalizeSpaces(summary);
+  validateHumanVoice(text, "요약글");
   if (/(정리을|정리와|정리이|발명가 남긴)/.test(text)) throw new Error("요약글에 제목을 잘못 잘라 붙인 문장이 있음");
   const firstSentence = text.split(/[.!?]/)[0] || "";
   if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상)/.test(firstSentence)) {
@@ -1724,6 +1749,8 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     "h2, h3, p, ul, ol, li, figure/table 태그를 자연스럽게 사용한다. strong 또는 b 태그는 쓰지 않는다.",
     "코드블록, 마크다운, 설명문, JSON-LD, script, iframe은 출력하지 않는다.",
     "광고 클릭 유도 문구, 구매 강요 문구, 애드센스 정책 위반 가능 문구는 넣지 않는다.",
+    `사이트별 화자 말투: ${siteVoiceGuide(site)}`,
+    "'자연스럽게 알아봅니다', '쉽게 살펴봅니다'처럼 글쓰기 방식을 설명하는 틀 문장은 쓰지 않는다. 구체적인 장면, 원리, 판단, 방법을 말한다.",
   ].join("\n");
 
   const userPrompt = [
@@ -2145,7 +2172,7 @@ for (let index = 0; index < titles.length; index += 1) {
     for (let 시도 = 1; 시도 <= 3; 시도 += 1) {
       try {
         const 이글키워드 = 대주제 && normalizeSpaces(title).includes(대주제) ? 대주제 : "";
-        const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드});
+        const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드, site});
         meta = generatedMeta.meta;
         if (이글키워드) meta = {...meta, focusKeyword: 이글키워드};
         validateExcerpt(meta.excerpt, meta.focusKeyword, title);
