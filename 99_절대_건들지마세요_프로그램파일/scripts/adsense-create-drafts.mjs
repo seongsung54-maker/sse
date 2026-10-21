@@ -1515,6 +1515,12 @@ function objectParticle(word) {
   return code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0 ? "을" : "를";
 }
 
+function subjectParticle(word) {
+  const text = normalizeSpaces(word);
+  const code = text.charCodeAt(text.length - 1);
+  return code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0 ? "이" : "가";
+}
+
 function summaryPlanForSite(site) {
   const plans = {
     1: {guide: "발명품이 오늘의 생활로 이어진 과정을 함께 살펴볼게요."},
@@ -1534,6 +1540,7 @@ function situationForTitle(title, site) {
       [["유리"], "창문 너머를 보거나 유리컵을 사용할 때에는 투명한 재료가 당연하게 느껴집니다."],
       [["도자기", "그릇"], "밥그릇이나 찻잔을 사용할 때에는 단단한 그릇이 만들어진 과정을 떠올리기 어렵습니다."],
       [["전화", "통신", "전신"], "누군가에게 바로 연락할 수 있는 일은 익숙하지만 통신 기술에는 긴 변화의 시간이 담겨 있습니다."],
+      [["전파", "무선"], "휴대전화로 연락하거나 와이파이를 사용할 때에는 선 없이 신호가 오가는 일이 너무 자연스럽게 느껴집니다."],
       [["전구", "조명"], "해가 진 뒤 불을 켜는 짧은 순간에도 조명 기술이 바꾼 생활의 모습이 담겨 있습니다."],
       [["주판", "계산"], "금액을 계산하거나 숫자를 정리할 때에는 계산 도구가 어떻게 달라졌는지 생각해 볼 수 있습니다."],
       [["도르래", "크랭크", "기계"], "엘리베이터와 자전거처럼 힘과 움직임이 바뀌는 장면에는 기계 장치의 원리가 숨어 있습니다."],
@@ -1577,7 +1584,7 @@ function situationForTitle(title, site) {
   if (found) return found[1];
   const topic = compactKoreanPhrase(title);
   const fallback = {
-    1: topic + "을 살펴보면 오늘의 생활 속 물건에도 발명의 역사가 남아 있음을 발견하게 됩니다.",
+    1: "집에서 쓰는 물건이나 자주 이용하는 서비스를 보면, 처음에는 누가 어떤 방법으로 만들었는지 궁금해질 때가 있습니다.",
     2: topic + "을 관측할 때에는 계절과 시간, 하늘 상태를 함께 확인할 필요가 있습니다.",
     3: topic + "을 확인할 때에는 한 번의 수치보다 기록과 측정 조건을 함께 봐야 합니다.",
     4: topic + "과 관련된 상황에서는 주변의 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.",
@@ -1585,6 +1592,15 @@ function situationForTitle(title, site) {
     6: topic + "을 보면 덴마크의 철도시설이 여행과 도시 생활에 어떤 역할을 하는지 알 수 있습니다.",
   };
   return fallback[Number(site)] || topic + "을 이해하려면 실제 상황과 핵심 내용을 함께 살펴볼 필요가 있습니다.";
+}
+
+function validateApprovalSummaryStyle(summary) {
+  const text = normalizeSpaces(summary);
+  if (/(정리을|정리와|정리이|발명가 남긴)/.test(text)) throw new Error("요약글에 제목을 잘못 잘라 붙인 문장이 있음");
+  const firstSentence = text.split(/[.!?]/)[0] || "";
+  if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상)/.test(firstSentence)) {
+    throw new Error("요약글이 일상생활 장면으로 시작하지 않음");
+  }
 }
 
 function buildCompliantApprovalSummary({title, keyword, site = 0}) {
@@ -1598,9 +1614,9 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
     " 핵심을 쉬운 말로 알아보겠습니다.",
   ];
   const templates = [
-    () => situation + " " + keyword + "가 오늘의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide,
-    () => situation + " " + keyword + "가 남긴 변화는 생각보다 우리 가까이에 있습니다. 왜 달라졌는지 차근차근 알아볼게요. " + plan.guide,
-    () => situation + " " + keyword + "를 따라가다 보면 지금 익숙한 모습도 처음부터 당연한 것은 아니었다는 걸 알게 됩니다. 어떻게 달라졌는지 함께 살펴볼게요. " + plan.guide,
+    () => situation + " " + keyword + subjectParticle(keyword) + " 지금의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide,
+    () => situation + " " + keyword + "이 우리 생활에 들어오기까지 어떤 변화가 있었는지 궁금하지 않으세요? 왜 달라졌는지 차근차근 알아볼게요. " + plan.guide,
+    () => situation + " " + keyword + "을 따라가다 보면 지금 익숙한 모습도 처음부터 당연한 것은 아니었다는 걸 알게 됩니다. 어떻게 달라졌는지 함께 살펴볼게요. " + plan.guide,
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
@@ -1614,6 +1630,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0}) {
         if ([...summary + suffix].length <= 160) summary += suffix;
       }
       if (blocked.test(summary)) throw new Error("제목과 무관하거나 반복된 고정 도입문이 요약글에 포함됨");
+      validateApprovalSummaryStyle(summary);
       if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
     }
   }
@@ -1631,6 +1648,7 @@ function repairApprovalSummary({title, keyword, site}) {
     if ([...summary + addition].length <= 160) summary += addition;
   }
   if ([...summary].length > 160) summary = summary.slice(0, 157).replace(/[ ,.]?$/, "") + "...";
+  validateApprovalSummaryStyle(summary);
   return summary;
 }
 
