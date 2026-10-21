@@ -285,11 +285,28 @@ function validateApprovalSummaryMatch(html, summary, focusKeyword) {
   if (focusKeyword && !bodySummary.includes(focusKeyword)) throw new Error("요약글에 메인키워드가 없음");
 }
 
-function validateExcerpt(excerpt, focusKeyword) {
+function titleContentKeywords(title, focusKeyword) {
+  const excluded = new Set(["알아본다", "살펴본다", "정리한다", "과정", "원리", "방법", "이야기", "정보"]);
+  return normalizeSpaces(title)
+    .replace(normalizeSpaces(focusKeyword), " ")
+    .split(/\s+/)
+    .map((word) => word.replace(/[은는이가을를의와과에로도만]$/u, ""))
+    .filter((word) => word.length >= 2 && !excluded.has(word));
+}
+
+function validateTitleKeywordConnection(text, title, focusKeyword, label) {
+  const keywords = titleContentKeywords(title, focusKeyword);
+  if (keywords.length && !keywords.some((keyword) => normalizeSpaces(text).includes(keyword))) {
+    throw new Error(`${label}에 제목과 직접 연결되는 핵심 키워드가 없음`);
+  }
+}
+
+function validateExcerpt(excerpt, focusKeyword, title = "") {
   const text = normalizeSpaces(stripTags(excerpt));
   const length = [...text].length;
   if (length < 100 || length > 140) throw new Error(`워드프레스 발췌문 글자 수가 조건과 다름 (${length}자 / 약 120자)`);
   if (focusKeyword && !text.includes(focusKeyword)) throw new Error("워드프레스 발췌문에 메인키워드가 없음");
+  if (title) validateTitleKeywordConnection(text, title, focusKeyword, "워드프레스 발췌문");
   if (!/[가-힣]/.test(text)) throw new Error("워드프레스 발췌문이 한국어 문장 형식이 아님");
   if (/[<>{}]/.test(text)) throw new Error("워드프레스 발췌문에 허용되지 않는 문자가 있음");
 }
@@ -1213,7 +1230,7 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = ""}) {
 
   const parsed = extractJsonObject(extractOutputText(data));
   const meta = ensureMetaDefaults(parsed, title);
-  validateExcerpt(meta.excerpt, meta.focusKeyword);
+  validateExcerpt(meta.excerpt, meta.focusKeyword, title);
 
   return {
     meta,
@@ -1471,7 +1488,7 @@ function postHasInlineImage(post, media) {
   return content.includes(`wp-image-${media.id}`) || content.includes(`"id":${media.id}`);
 }
 
-async function generateApprovalSummary({apiKey, model, title, keyword}) {
+async function generateApprovalSummary({apiKey, model, title, keyword, site = 0}) {
   const requiredPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
   let lastLength = 0;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -1487,6 +1504,8 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
             `메인키워드: ${keyword}`,
             "공백 포함 정확히 140~160자의 한국어 요약글을 작성한다.",
             "한국인이 직접 겪은 경험을 한 번 넣고, 이 글을 쓰는 이유와 다룰 내용을 소개한다.",
+            `첫 문장은 ${situationForTitle(title, site)}처럼 제목 주제와 연결된 생활 장면에서 시작한다.`,
+            "제목에 들어 있는 구체적인 핵심 키워드를 1개 이상 문장에 그대로 넣는다. 제목 일부를 어색하게 자르거나 조사만 덧붙이지 않는다.",
             `메인키워드 "${keyword}"를 문장 안에 1회 이상 그대로 넣는다.`,
             "왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나를 자연스럽게 포함한다.",
           ].join("\n")},
@@ -1504,7 +1523,11 @@ async function generateApprovalSummary({apiKey, model, title, keyword}) {
       summary.includes(keyword) &&
       /[가-힣]/.test(summary) &&
       requiredPhrases.some((phrase) => summary.includes(phrase));
-    if (valid) return {summary, usage: extractUsage(data)};
+    if (valid) {
+      validateApprovalSummaryStyle(summary);
+      validateTitleKeywordConnection(summary, title, keyword, "요약글");
+      return {summary, usage: extractUsage(data)};
+    }
   }
   throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
 }
@@ -1741,11 +1764,19 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
   if (키워드) {
     let summary;
     try {
+      const generatedSummary = await generateApprovalSummary({apiKey, model, title, keyword: 키워드, site});
+      summary = generatedSummary.summary;
+    } catch {
       summary = buildCompliantApprovalSummary({title, keyword: 키워드, site});
+    }
+    try {
+      validateApprovalSummaryStyle(summary);
+      validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
       validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     } catch {
       summary = repairApprovalSummary({title, keyword: 키워드, site});
+      validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
       validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     }
@@ -2089,7 +2120,7 @@ for (let index = 0; index < titles.length; index += 1) {
         const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드});
         meta = generatedMeta.meta;
         if (이글키워드) meta = {...meta, focusKeyword: 이글키워드};
-        validateExcerpt(meta.excerpt, meta.focusKeyword);
+        validateExcerpt(meta.excerpt, meta.focusKeyword, title);
         metaUsage = generatedMeta.usage;
         break;
       } catch (metaError) {
@@ -2157,7 +2188,7 @@ for (let index = 0; index < titles.length; index += 1) {
     const htmlWithImage = insertImageBlockIntoArticle(html, buildArticleImageBlock({media: featuredMedia}));
     validateArticleHtml(htmlWithImage, title, {minChars, focusKeyword: meta.focusKeyword});
     validateApprovalSummaryMatch(htmlWithImage, articleSummary, meta.focusKeyword);
-    validateExcerpt(meta.excerpt, meta.focusKeyword);
+    validateExcerpt(meta.excerpt, meta.focusKeyword, title);
     validateInlineImageBlock(htmlWithImage, featuredMedia);
     const localPath = join(outputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
     const visiblePath = join(visibleOutputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
