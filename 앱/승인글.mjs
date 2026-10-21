@@ -459,7 +459,7 @@ export async function 글만들기(옵션 = {}) {
   return 잠금으로({작업폴더: 옵션.작업폴더, 이름: `승인글-사이트${Number(옵션.사이트) || 1}`, 일: () => 글만들기본체(옵션)});
 }
 
-async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날짜모드 = "", 시작날짜 = "", 무작위일수 = 0, 시간간격 = 0, 하루개수 = 0, 최소간격시간 = 0, 시작시각 = "", 간격분 = 0, 공개발행 = false}) {
+async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날짜모드 = "", 시작날짜 = "", 무작위일수 = 0, 시간간격 = 0, 하루개수 = 0, 최소간격시간 = 0, 시작시각 = "", 간격분 = 0, 공개발행 = false, 날짜순번 = null, 고정시각 = ""}) {
   const 설정 = await 설정읽기(작업폴더);
   const 빠진 = [];
   if (!설정.수강코드) 빠진.push("수강 코드");
@@ -483,9 +483,13 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
   if (하루개수) argv.push(`--per-day=${하루개수}`);
   if (최소간격시간) argv.push(`--min-gap-hours=${최소간격시간}`);
   if (시작날짜) argv.push(`--start-date=${시작날짜}`);
+  if (고정시각) argv.push(`--fixed-time=${고정시각}`);
   if (무작위일수) argv.push(`--random-days=${무작위일수}`);
   if (시간간격) argv.push(`--hour-gap=${시간간격}`);
-  if (날짜모드 && 날짜모드 !== "now" && 날짜모드 !== "spread") argv.push(`--date-offset=${앞상태.만든수}`); // 글 1개씩 불러도 날짜 순번이 이어지게
+  if (날짜모드 && 날짜모드 !== "now" && 날짜모드 !== "spread") {
+    const 적용날짜순번 = Number.isFinite(Number(날짜순번)) ? Math.max(0, Math.floor(Number(날짜순번))) : 앞상태.만든수;
+    argv.push(`--date-offset=${적용날짜순번}`); // 과거 발행은 기준 날짜를 직접 지정할 수 있다.
+  }
   if (!날짜모드 || 날짜모드 === "spread") {
     // 기본(spread): 오늘 이 사이트에서 이미 만든 글 수만큼 슬롯을 건너뛴다 — 1개씩 불러도 하루 3개·최소 3시간 간격이 유지된다
     let 오늘만든 = 0;
