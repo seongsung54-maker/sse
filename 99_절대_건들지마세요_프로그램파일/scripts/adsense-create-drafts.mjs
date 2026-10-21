@@ -333,6 +333,7 @@ function validateExcerpt(excerpt, focusKeyword, title = "") {
 
 function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}) {
   if (/<h1\b/i.test(html)) throw new Error("본문에 h1 태그가 남아 있음");
+  validateHumanVoice(stripTags(html), "본문");
   if (!/<!--\s*wp:/i.test(html)) throw new Error("본문에 Gutenberg 블록 주석이 없음");
   const firstH2 = html.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
   if (!firstH2) throw new Error("본문 첫 소제목 h2를 찾지 못함");
