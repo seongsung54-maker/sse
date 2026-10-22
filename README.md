@@ -60,7 +60,7 @@ Windows: ChatGPT 앱 설치 폴더 안의 `node.exe` 를 찾아(`Get-ChildItem -
 
 ## 📖 안내서
 
-### 👉 **https://makeit-edu.github.io/makeit-middle-kit/**
+### 👉 **https://github.com/seongsung54-maker/sse
 
 **10단계**면 시작할 수 있습니다. 휴대폰으로 보면서 컴퓨터로 따라 하면 편합니다.
 
@@ -98,11 +98,11 @@ Windows: ChatGPT 앱 설치 폴더 안의 `node.exe` 를 찾아(`Get-ChildItem -
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-> ### ⚠️ 주소가 `makeit-edu/makeit-middle-kit` 이라면
+> ### ⚠️ 주소가 `seongsung54-maker/sse` 이라면
 >
 > 여기는 **원본 키트**입니다. 여기서 작업하면 **저장이 안 되고 나중에 전부 사라집니다.**
 >
-> **[👉 내 작업방 먼저 만들기](https://github.com/new?template_name=makeit-middle-kit&template_owner=makeit-edu)**
+> **[👉 내 작업방 먼저 만들기](https://github.com/seongsung54-maker/sse)**
 
 <br>
 
@@ -152,7 +152,7 @@ Windows: ChatGPT 앱 설치 폴더 안의 `node.exe` 를 찾아(`Get-ChildItem -
 
 ## 막혔을 때
 
-자주 있는 일은 거의 다 여기 있습니다 → **[자주 묻는 질문](https://makeit-edu.github.io/makeit-middle-kit/faq.html)**
+자주 있는 일은 거의 다 여기 있습니다 → **[자주 묻는 질문](https://github.com/seongsung54-maker/sse)**
 
 찾는 게 없으면 검은 창에 **`진단`** 치고 엔터 → 나온 내용을 **전부 복사**해서 코덱스에게 붙여넣고 물어보세요.
 
@@ -173,4 +173,4 @@ Windows: ChatGPT 앱 설치 폴더 안의 `node.exe` 를 찾아(`Get-ChildItem -
 
 ---
 
-<sub>막혔을 때 → <a href="https://makeit-edu.github.io/makeit-middle-kit/faq.html">자주 묻는 질문</a></sub>
+<sub>막혔을 때 → <a href="https://github.com/seongsung54-maker/sse">자주 묻는 질문</a></sub>
