@@ -340,8 +340,13 @@ function validateHumanVoice(text, label) {
 }
 
 function repairExcerptVoice(excerpt, title) {
-  return normalizeSpaces(String(excerpt || ""))
+  let repaired = normalizeSpaces(String(excerpt || ""))
     .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, "들여다봅니다");
+  if ([...repaired].length < 100) {
+    const addition = ` ${titleCoreTopic(title)}에 담긴 원리와 변화가 오늘의 생활에 남긴 모습을 함께 살펴봅니다.`;
+    if ([...repaired + addition].length <= 140) repaired += addition;
+  }
+  return repaired;
 }
 
 function validateExcerpt(excerpt, focusKeyword, title = "") {
@@ -1682,7 +1687,17 @@ function situationForTitle(title, site) {
     5: topic + objectParticle(topic) + " 살펴보면 외래 생물이 생활과 생태계에 어떻게 연결되는지 생각해 볼 수 있습니다.",
     6: topic + objectParticle(topic) + " 보면, 덴마크의 철도시설이 여행과 도시 생활에 어떤 역할을 하는지 알 수 있습니다.",
   };
-  return fallback[Number(site)] || topic + objectParticle(topic) + " 이해하려면 실제 상황과 핵심 내용을 함께 살펴볼 필요가 있습니다.";
+  if (fallback[Number(site)]) return fallback[Number(site)];
+  const generalScenes = {
+    1: ["박물관에서 오래된 도구를 보면 지금과 다른 쓰임이 궁금해집니다.", "집에서 쓰는 도구의 작은 움직임을 보면 처음 어떤 생각에서 시작됐는지 궁금해집니다.", "전시에서 낡은 기계를 보면 익숙한 기능이 어떻게 만들어졌는지 생각해 보게 됩니다."],
+    2: ["밤하늘을 올려다보다가 낯선 별 무리를 보면 방향을 찾고 싶어집니다.", "별이 또렷한 밤에는 같은 하늘도 계절마다 다르게 보인다는 점이 궁금해집니다."],
+    3: ["농장 기록에서 평소와 다른 수치를 보면 무엇부터 확인해야 할지 고민하게 됩니다.", "센서 화면의 숫자가 달라지면 재배 환경부터 다시 살펴보게 됩니다."],
+    4: ["여러 사람이 같은 의견을 말하는 자리에서는 내 생각도 흔들릴 수 있습니다.", "모임의 분위기가 빨리 바뀌면 평소와 다른 선택을 하게 될 때가 있습니다."],
+    5: ["산책길에 낯선 생물을 발견하면 이름과 서식 환경부터 궁금해집니다.", "주변에서 처음 보는 생물을 만나면 기록해도 될지 망설여질 수 있습니다."],
+    6: ["낯선 도시의 역에 들어서면 이동 동선과 공간의 분위기가 먼저 눈에 들어옵니다.", "여행 중 환승을 할 때에는 역이 도시 생활과 어떻게 이어지는지 궁금해집니다."],
+  };
+  const choices = generalScenes[Number(site)] || ["생활 속 장면을 보면 그 뒤에 담긴 원리가 궁금해집니다."];
+  return choices[Number.parseInt(hashText(topic, 2), 16) % choices.length];
 }
 
 const BANNED_APPROVAL_SUMMARY_PHRASES = [
