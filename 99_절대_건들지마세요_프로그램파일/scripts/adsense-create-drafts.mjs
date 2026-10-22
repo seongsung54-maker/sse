@@ -1718,6 +1718,7 @@ function validateApprovalSummaryStyle(summary, {recentSummaries = [], title = ""
   if (summaryOpeningIsRepeated(text, recentSummaries)) throw new Error("요약글의 첫 문장이 이전 요약글과 반복됨");
   if (/(정리처럼|정리을|정리와|정리이|발명가 남긴)/.test(text)) throw new Error("요약글에 제목을 잘못 잘라 붙인 문장이 있음");
   if (title && openingLooksLikeTitleParaphrase(text, title)) throw new Error("요약글이 제목을 풀어쓴 문장으로 시작함");
+  if (title && text.includes(normalizeSpaces(title))) throw new Error("요약글에 제목 문장이 그대로 들어감");
   const firstSentence = text.split(/[.!?]/)[0] || "";
   if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상|밤하늘|농장|회의|모임|공원|하천|여행|역|화면|기록|주전자|창문)/.test(firstSentence)) throw new Error("요약글이 제목 주제와 맞는 장면으로 시작하지 않음");
 }
@@ -1728,7 +1729,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummarie
   const endings = ["왜 이런 변화가 필요했는지 궁금해지죠.", "어떻게 지금의 모습으로 이어졌는지 궁금해질 수 있어요.", "처음에는 어떤 문제를 풀려고 했는지 생각해 보게 됩니다."];
   for (const topic of topics) for (const ending of endings) {
     let summary = situation + " " + keyword + "과 " + topic + "을 떠올리면 " + ending + " " + (guides[Number(site)] || "이 글에서 핵심 흐름과 확인할 내용을 살펴볼게요.");
-    for (const addition of [" 제목 속 구체적인 변화와 쓰임을 함께 짚어볼게요.", " 생활 속 장면과 연결해 핵심을 확인해 볼게요."]) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
+    for (const addition of [" 제목 속 구체적인 변화와 쓰임을 차분히 살펴볼게요.", " 생활 속 장면과 연결해 핵심을 확인해 볼게요."]) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
     if ([...summary].length >= 140 && [...summary].length <= 160) { validateApprovalSummaryStyle(summary, {recentSummaries, title}); validateTitleKeywordConnection(summary, title, keyword, "요약글"); return summary; }
   }
   throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
