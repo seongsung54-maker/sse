@@ -1,6 +1,6 @@
 #!/bin/zsh
 # 앱/배포.sh "<커밋 메시지>" [버전]
-# 1) 프로그램 변경을 커밋  2) 그 커밋 sha 를 목록.json 에 적어 한 번 더 커밋  3) makeit-edu 계정으로 푸시
+# 1) 프로그램 변경을 커밋  2) 그 커밋 sha 를 목록.json 에 적어 한 번 더 커밋  3) seongsung54-maker 계정으로 푸시
 set -e
 cd "$(dirname "$0")/.."
 for f in 앱/*.mjs 앱/네이버/*.mjs 99_절대_건들지마세요_프로그램파일/scripts/**/*.mjs(N); do node --check "$f"; done
@@ -28,6 +28,6 @@ print("목록:",ver,sha[:8],len(files),"파일")
 PY
 git add 앱/목록.json
 git commit -q -m "앱 목록: 버전 $VER → 커밋 ${sha:0:8}"
-gh auth switch -u makeit-edu >/dev/null 2>&1 || true
+gh auth switch -u seongsung54-maker >/dev/null 2>&1 || true
 git push -q origin main && echo "푸시 완료 $(git rev-parse --short HEAD)"
 gh auth switch -u dreamyapp >/dev/null 2>&1 || true
