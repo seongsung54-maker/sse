@@ -26,6 +26,36 @@ function argValue(name, fallback = "") {
   return hit ? hit.slice(prefix.length) : fallback;
 }
 
+function siteWritingFlow(site, type = "summary") {
+  const flows = {
+    1: {
+      summary: "제목의 구체적인 대상에 맞는 생활 장면 → 그 장면에서 생길 질문 → 역사 속 발명과 제목의 핵심 대상 연결 → 원리·변화·배경 안내",
+      excerpt: "제목의 대상과 맞는 짧은 생활 장면 또는 궁금증 → 역사 속 발명과 제목의 핵심 대상 → 글에서 알게 될 발명 원리 또는 생활 변화",
+    },
+    2: {
+      summary: "밤하늘이나 관측 장면 → 계절·시간·방향에 따라 별자리가 달라지는 궁금증 → 계절별 별자리와 제목 속 별자리·조건 연결 → 관측 시기·위치·찾는 방법 안내",
+      excerpt: "제목과 맞는 짧은 밤하늘 장면 → 계절별 별자리와 제목의 별자리·관측 조건 → 계절별 관측 기준 또는 찾는 방법",
+    },
+    3: {
+      summary: "재배 중 수치 변화 또는 자동화 장비 확인 장면 → 무엇부터 점검할지 질문 → 농업용 센서와 제목 속 측정값·오류·장비 연결 → 점검 순서·오류 대응·자동화 활용 안내",
+      excerpt: "농장 기록이나 센서 화면의 변화 장면 → 농업용 센서와 제목의 측정 대상·장비 → 오류 원인 또는 자동화 활용 방법",
+    },
+    4: {
+      summary: "회의·모임·온라인 반응 같은 집단 상황 → 평소 생각과 다르게 행동하거나 의견이 흔들리는 이유 → 군중 심리와 제목 속 상황·행동 연결 → 판단 점검과 대응 방법 안내",
+      excerpt: "다른 사람의 말이나 분위기에 영향을 받는 장면 → 군중 심리와 제목의 행동·상황 → 개인 판단을 점검하는 방법",
+    },
+    5: {
+      summary: "공원·하천·화단·반려식물 등 주변 생물 관찰 장면 → 낯선 생물을 보았을 때 확인할 점 → 외래 생물과 제목 속 생물·서식 환경·기록 활동 연결 → 분포·생태 영향·관찰 기록의 이유 안내",
+      excerpt: "주변에서 낯선 생물을 발견한 장면 → 외래 생물과 제목의 생물·관찰 상황 → 기록 이유·생태적 의미·확인 방법",
+    },
+    6: {
+      summary: "여행 중 역·환승·이동 동선을 살피는 장면 → 덴마크 이동 공간의 특징에 대한 궁금증 → 덴마크의 철도시설과 제목 속 역·노선·건축·물류 기능 연결 → 여행 정보·문화·도시와 철도의 관계 안내",
+      excerpt: "낯선 도시에서 역과 환승을 이용하는 장면 → 덴마크의 철도시설과 제목의 시설·특징 → 여행·건축·문화 정보",
+    },
+  };
+  return flows[Number(site)]?.[type] || "제목과 맞는 구체적인 상황 → 메인키워드와 제목의 핵심 대상 → 글에서 알게 될 내용";
+}
+
 function siteVoiceGuide(site) {
   const voices = {
     1: "화자: 일상 물건의 뒷이야기를 들려주는 사람. 친근한 해요체를 주로 쓰고, 익숙한 물건·장면에서 호기심을 시작한다. 확인할 수 없는 개인 경험은 꾸며내지 않는다.",
@@ -321,17 +351,8 @@ function validateHumanVoice(text, label) {
 }
 
 function repairExcerptVoice(excerpt, title) {
-  let text = normalizeSpaces(String(excerpt || ""))
+  return normalizeSpaces(String(excerpt || ""))
     .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, "들여다봅니다");
-  const additions = [
-    " 이 글에서 중요한 흐름도 짚어봅니다.",
-    " 오늘의 생활과 이어지는 이유도 생각해 봅니다.",
-  ];
-  for (const addition of additions) {
-    if ([...text].length >= 100) break;
-    if ([...text + addition].length <= 140) text += addition;
-  }
-  return text;
 }
 
 function validateExcerpt(excerpt, focusKeyword, title = "") {
@@ -1222,6 +1243,8 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = "", sit
   const userPrompt = [
     `글 제목: ${title}`,
     `사이트별 말투: ${siteVoiceGuide(site)}`,
+    `사이트별 발췌문 작성 순서: ${siteWritingFlow(site, "excerpt")}`,
+    "작성 순서는 문장을 복사하는 틀이 아니다. 제목의 구체적인 대상과 맞는 장면·내용을 새로 고르고, 제목과 무관한 공통 도입문이나 빈 끝맺음은 쓰지 않는다.",
     "발췌문은 본문·요약글과 같은 화자가 말하는 것처럼 작성한다. '자연스럽게 알아봅니다', '쉽게 살펴봅니다'처럼 작성 방식을 설명하는 틀 문장은 쓰지 않는다.",
     고정키워드 ? `포커스 키워드는 "${고정키워드}" 로 정해져 있다. focusKeyword 에 그대로 쓰고, excerpt 와 featuredImageAlt 에 이 문구를 자연스럽게 1회 포함해라.` : "",
     "발췌문은 공백 포함 100~140자(약 120자)로 쓴다. 메인키워드를 반드시 1회 이상 넣고, 글의 내용을 건조하게 요약하지 말고 일상에서 공감할 수 있는 상황과 이 글에서 알게 될 내용을 자연스럽게 이어 쓴다. '독자'라는 단어와 HTML·마크다운은 쓰지 않는다.",
@@ -1556,6 +1579,8 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
             "제목에 들어 있는 구체적인 핵심 키워드를 1개 이상 문장에 그대로 넣는다. 제목 일부를 어색하게 자르거나 조사만 덧붙이지 않는다.",
             `메인키워드 "${keyword}"를 문장 안에 1회 이상 그대로 넣는다.`,
             `사이트별 화자 말투: ${siteVoiceGuide(site)}`,
+            `사이트별 요약글 작성 순서: ${siteWritingFlow(site, "summary")}`,
+            "작성 순서는 문장을 복사하는 틀이 아니다. 제목의 구체적인 대상과 맞는 장면·질문·안내 내용을 새로 고르고, 제목과 무관한 공통 도입문이나 빈 끝맺음은 쓰지 않는다.",
             "왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나를 자연스럽게 포함한다.",
             "'자연스럽게 알아봅니다', '쉽게 살펴봅니다'처럼 글쓰기 방식을 설명하는 말은 쓰지 말고, 제목의 구체적인 내용과 이 글에서 알게 될 점을 말한다.",
           ].join("\n")},
@@ -1668,7 +1693,6 @@ function situationForTitle(title, site) {
 }
 
 const BANNED_APPROVAL_SUMMARY_PHRASES = [
-  "집에서 쓰는 물건이나 자주 이용하는 서비스를 보면, 처음에는 누가 어떤 방법으로 만들었는지 궁금해질 때가 있습니다.",
   "함께 짚어봅니다",
   "함께 살펴봅니다",
   "필요한 내용을 차근차근 살펴보겠습니다",
