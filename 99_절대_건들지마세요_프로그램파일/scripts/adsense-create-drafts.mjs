@@ -1530,6 +1530,11 @@ function postHasInlineImage(post, media) {
 
 async function generateApprovalSummary({apiKey, model, title, keyword, site = 0, recentSummaries = []}) {
   const requiredPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
+  const previousOpenings = recentSummaries
+    .map((item) => normalizeSpaces(item).split(/[.!?]/)[0])
+    .filter(Boolean)
+    .slice(-8)
+    .join(" | ");
   let lastLength = 0;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const response = await fetch(openAiResponsesUrl(), {
@@ -1543,10 +1548,11 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
             `글 제목: ${title}`,
             `메인키워드: ${keyword}`,
             "공백 포함 정확히 140~160자의 한국어 요약글을 작성한다.",
-            "한국인이 직접 겪은 경험을 한 번 넣고, 이 글을 쓰는 이유와 다룰 내용을 소개한다.",
+            "한국인이 공감할 수 있는 일상 장면을 넣되, 글쓴이가 직접 겪었다는 사실을 꾸며내지 않는다.",
             `첫 문장은 ${situationForTitle(title, site)}처럼 제목 주제와 연결된 생활 장면에서 시작한다.`,
             "이전 요약글과 같은 첫 문장, 같은 도입 소재, 같은 끝맺음을 되풀이하지 않는다. 제목의 구체적인 대상에 맞는 새 장면으로 시작한다.",
             "함께 짚어봅니다, 함께 살펴봅니다, 필요한 내용을 차근차근 살펴보겠습니다처럼 어느 제목에도 붙일 수 있는 빈 문장으로 끝내지 않는다.",
+            previousOpenings ? `피해야 할 기존 요약글 첫 문장: ${previousOpenings}` : "이전 요약글과 다른 도입 문장으로 쓴다.",
             "제목에 들어 있는 구체적인 핵심 키워드를 1개 이상 문장에 그대로 넣는다. 제목 일부를 어색하게 자르거나 조사만 덧붙이지 않는다.",
             `메인키워드 "${keyword}"를 문장 안에 1회 이상 그대로 넣는다.`,
             `사이트별 화자 말투: ${siteVoiceGuide(site)}`,
@@ -1687,7 +1693,7 @@ function summaryOpeningIsRepeated(summary, recentSummaries = []) {
 function validateApprovalSummaryStyle(summary, {recentSummaries = []} = {}) {
   const text = normalizeSpaces(summary);
   validateHumanVoice(text, "요약글");
-  if (BANNED_APPROVAL_SUMMARY_PHRASES.some((phrase) => text.includes(phrase))) {
+  if (BANNED_APPROVAL_SUMMARY_PHRASES.some((phrase) => text.includes(phrase)) || /함께 (?:짚어|살펴|알아)/.test(text)) {
     throw new Error("요약글에 반복되거나 내용이 없는 고정 문장이 포함됨");
   }
   if (summaryOpeningIsRepeated(text, recentSummaries)) {
@@ -1712,7 +1718,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummarie
   const templates = [
     () => situation + " " + keyword + subjectParticle(keyword) + " 지금의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide,
     () => situation + " " + keyword + "이 우리 생활에 들어오기까지 어떤 변화가 있었는지 궁금하지 않으세요? 왜 달라졌는지 차근차근 알아볼게요. " + plan.guide,
-    () => situation + " " + keyword + "을 따라가다 보면 지금 익숙한 모습도 처음부터 당연한 것은 아니었다는 걸 알게 됩니다. 어떻게 달라졌는지 함께 살펴볼게요. " + plan.guide,
+    () => situation + " " + keyword + "을 따라가다 보면 지금 익숙한 모습도 처음부터 당연한 것은 아니었다는 걸 알게 됩니다. 어떻게 달라졌는지 제목의 변화와 연결해 볼게요. " + plan.guide,
   ];
   const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
   for (let offset = 0; offset < templates.length; offset += 1) {
@@ -1720,7 +1726,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummarie
     for (let size = Math.min(34, cleanedTitle.length); size >= 6; size -= 1) {
       const topic = cleanedTitle.slice(0, size).trim();
       let summary = opening(topic);
-      if (!["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"].some((phrase) => summary.includes(phrase))) summary += " 왜 그런지 함께 살펴보겠습니다.";
+      if (!["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"].some((phrase) => summary.includes(phrase))) summary += " 왜 그런지 제목의 변화와 연결해 볼게요.";
       for (const suffix of suffixes) {
         if ([...summary].length >= 140) break;
         if ([...summary + suffix].length <= 160) summary += suffix;
