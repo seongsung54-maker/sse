@@ -28,34 +28,15 @@ function argValue(name, fallback = "") {
 
 function siteWritingFlow(site, type = "summary") {
   const flows = {
-    1: {
-      summary: "제목의 구체적인 대상에 맞는 생활 장면 → 그 장면에서 생길 질문 → 역사 속 발명과 제목의 핵심 대상 연결 → 원리·변화·배경 안내",
-      excerpt: "제목의 대상과 맞는 짧은 생활 장면 또는 궁금증 → 역사 속 발명과 제목의 핵심 대상 → 글에서 알게 될 발명 원리 또는 생활 변화",
-    },
-    2: {
-      summary: "밤하늘이나 관측 장면 → 계절·시간·방향에 따라 별자리가 달라지는 궁금증 → 계절별 별자리와 제목 속 별자리·조건 연결 → 관측 시기·위치·찾는 방법 안내",
-      excerpt: "제목과 맞는 짧은 밤하늘 장면 → 계절별 별자리와 제목의 별자리·관측 조건 → 계절별 관측 기준 또는 찾는 방법",
-    },
-    3: {
-      summary: "재배 중 수치 변화 또는 자동화 장비 확인 장면 → 무엇부터 점검할지 질문 → 농업용 센서와 제목 속 측정값·오류·장비 연결 → 점검 순서·오류 대응·자동화 활용 안내",
-      excerpt: "농장 기록이나 센서 화면의 변화 장면 → 농업용 센서와 제목의 측정 대상·장비 → 오류 원인 또는 자동화 활용 방법",
-    },
-    4: {
-      summary: "회의·모임·온라인 반응 같은 집단 상황 → 평소 생각과 다르게 행동하거나 의견이 흔들리는 이유 → 군중 심리와 제목 속 상황·행동 연결 → 판단 점검과 대응 방법 안내",
-      excerpt: "다른 사람의 말이나 분위기에 영향을 받는 장면 → 군중 심리와 제목의 행동·상황 → 개인 판단을 점검하는 방법",
-    },
-    5: {
-      summary: "공원·하천·화단·반려식물 등 주변 생물 관찰 장면 → 낯선 생물을 보았을 때 확인할 점 → 외래 생물과 제목 속 생물·서식 환경·기록 활동 연결 → 분포·생태 영향·관찰 기록의 이유 안내",
-      excerpt: "주변에서 낯선 생물을 발견한 장면 → 외래 생물과 제목의 생물·관찰 상황 → 기록 이유·생태적 의미·확인 방법",
-    },
-    6: {
-      summary: "여행 중 역·환승·이동 동선을 살피는 장면 → 덴마크 이동 공간의 특징에 대한 궁금증 → 덴마크의 철도시설과 제목 속 역·노선·건축·물류 기능 연결 → 여행 정보·문화·도시와 철도의 관계 안내",
-      excerpt: "낯선 도시에서 역과 환승을 이용하는 장면 → 덴마크의 철도시설과 제목의 시설·특징 → 여행·건축·문화 정보",
-    },
+    1: {summary: "제목 속 발명품과 맞는 생활 장면 → 그 장면에서 생길 구체적인 궁금증 → 역사 속 발명과 발명품의 원리·변화 연결 → 오늘의 쓰임 안내", excerpt: "요약글과 다른 생활 장면 또는 감각적 순간 → 역사 속 발명과 제목 속 발명품 연결 → 원리와 생활 변화 안내"},
+    2: {summary: "제목의 별자리와 맞는 밤하늘 관측 장면 → 계절·시간·방향에 대한 궁금증 → 계절별 별자리와 관측 조건 연결 → 찾는 위치와 시기 안내", excerpt: "요약글과 다른 밤하늘 장면 → 계절별 별자리와 제목의 별자리·관측 조건 연결 → 관측 기준 안내"},
+    3: {summary: "제목의 센서·작물·수치와 맞는 농장 확인 장면 → 이상 수치에 대한 질문 → 농업용 센서와 측정·오류·자동화 연결 → 점검 순서와 대응 안내", excerpt: "요약글과 다른 재배·센서 화면 장면 → 농업용 센서와 제목의 측정 대상 연결 → 오류 원인이나 자동화 활용 안내"},
+    4: {summary: "제목의 상황과 맞는 회의·모임·온라인 반응 장면 → 내 판단이 흔들리는 이유에 대한 질문 → 군중 심리와 행동 연결 → 생각을 점검하고 대응하는 방법 안내", excerpt: "요약글과 다른 집단 상황 → 군중 심리와 제목의 행동·상황 연결 → 개인 판단을 지키는 관점 안내"},
+    5: {summary: "제목의 생물·서식지와 맞는 관찰 장면 → 낯선 생물을 봤을 때의 궁금증 → 외래 생물과 생태계·기록 활동 연결 → 확인·기록의 이유 안내", excerpt: "요약글과 다른 주변 관찰 장면 → 외래 생물과 제목의 생물·환경 연결 → 기록 또는 생태적 의미 안내"},
+    6: {summary: "제목의 역·노선·시설과 맞는 여행 이동 장면 → 공간과 이동 방식에 대한 궁금증 → 덴마크의 철도시설과 제목의 기능 연결 → 여행·건축·문화 정보 안내", excerpt: "요약글과 다른 역·환승·도시 풍경 → 덴마크의 철도시설과 제목의 시설·특징 연결 → 여행에서 볼 수 있는 문화와 공간 안내"},
   };
-  return flows[Number(site)]?.[type] || "제목과 맞는 구체적인 상황 → 메인키워드와 제목의 핵심 대상 → 글에서 알게 될 내용";
+  return flows[Number(site)]?.[type] || "제목과 맞는 구체적인 장면 → 생긴 궁금증 → 메인키워드와 제목의 핵심 대상 → 이 글에서 확인할 내용";
 }
-
 function siteVoiceGuide(site) {
   const voices = {
     1: "화자: 일상 물건의 뒷이야기를 들려주는 사람. 친근한 해요체를 주로 쓰고, 익숙한 물건·장면에서 호기심을 시작한다. 확인할 수 없는 개인 경험은 꾸며내지 않는다.",
@@ -1580,8 +1561,8 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
             `메인키워드: ${keyword}`,
             "공백 포함 정확히 140~160자의 한국어 요약글을 작성한다.",
             "한국인이 공감할 수 있는 일상 장면을 넣되, 글쓴이가 직접 겪었다는 사실을 꾸며내지 않는다.",
-            `첫 문장은 ${situationForTitle(title, site)}처럼 제목 주제와 연결된 생활 장면에서 시작한다.`,
-            "이전 요약글과 같은 첫 문장, 같은 도입 소재, 같은 끝맺음을 되풀이하지 않는다. 제목의 구체적인 대상에 맞는 새 장면으로 시작한다.",
+            `첫 문장은 ${situationForTitle(title, site)}처럼 제목 주제와 연결된 생활 장면에서 시작한다. 제목 문구나 제목의 앞부분을 그대로 풀어 쓰며 시작하지 않는다.`,
+            "워드프레스 발췌문처럼 장면에서 출발하되, 본문 요약글은 그 장면의 궁금증과 제목의 원리·변화까지 더 충분히 이어 쓴다. 이전 요약글과 같은 첫 문장, 같은 도입 소재, 같은 끝맺음을 되풀이하지 않는다.",
             "함께 짚어봅니다, 함께 살펴봅니다, 필요한 내용을 차근차근 살펴보겠습니다처럼 어느 제목에도 붙일 수 있는 빈 문장으로 끝내지 않는다.",
             previousOpenings ? `피해야 할 기존 요약글 첫 문장: ${previousOpenings}` : "이전 요약글과 다른 도입 문장으로 쓴다.",
             "제목에 들어 있는 구체적인 핵심 키워드를 1개 이상 문장에 그대로 넣는다. 제목 일부를 어색하게 자르거나 조사만 덧붙이지 않는다.",
@@ -1607,7 +1588,7 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
       /[가-힣]/.test(summary) &&
       requiredPhrases.some((phrase) => summary.includes(phrase));
     if (valid) {
-      validateApprovalSummaryStyle(summary, {recentSummaries});
+      validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, keyword, "요약글");
       return {summary, usage: extractUsage(data)};
     }
@@ -1722,64 +1703,36 @@ function summaryOpeningIsRepeated(summary, recentSummaries = []) {
   });
 }
 
-function validateApprovalSummaryStyle(summary, {recentSummaries = []} = {}) {
+function openingLooksLikeTitleParaphrase(summary, title) {
+  const opening = comparableText(normalizeSpaces(summary).split(/[.!?]/)[0] || "");
+  const core = comparableText(titleCoreTopic(title));
+  if (!opening || !core) return false;
+  const prefixLength = Math.min(16, core.length);
+  return prefixLength >= 8 && (opening.startsWith(core.slice(0, prefixLength)) || core.startsWith(opening.slice(0, Math.min(12, opening.length))));
+}
+
+function validateApprovalSummaryStyle(summary, {recentSummaries = [], title = ""} = {}) {
   const text = normalizeSpaces(summary);
   validateHumanVoice(text, "요약글");
-  if (BANNED_APPROVAL_SUMMARY_PHRASES.some((phrase) => text.includes(phrase)) || /함께 (?:짚어|살펴|알아)/.test(text)) {
-    throw new Error("요약글에 반복되거나 내용이 없는 고정 문장이 포함됨");
-  }
-  if (summaryOpeningIsRepeated(text, recentSummaries)) {
-    throw new Error("요약글의 첫 문장이 이전 요약글과 반복됨");
-  }
+  if (BANNED_APPROVAL_SUMMARY_PHRASES.some((phrase) => text.includes(phrase)) || /함께 (?:짚어|살펴|알아)/.test(text)) throw new Error("요약글에 반복되거나 내용이 없는 고정 문장이 포함됨");
+  if (summaryOpeningIsRepeated(text, recentSummaries)) throw new Error("요약글의 첫 문장이 이전 요약글과 반복됨");
   if (/(정리처럼|정리을|정리와|정리이|발명가 남긴)/.test(text)) throw new Error("요약글에 제목을 잘못 잘라 붙인 문장이 있음");
+  if (title && openingLooksLikeTitleParaphrase(text, title)) throw new Error("요약글이 제목을 풀어쓴 문장으로 시작함");
   const firstSentence = text.split(/[.!?]/)[0] || "";
-  if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상)/.test(firstSentence)) {
-    throw new Error("요약글이 일상생활 장면으로 시작하지 않음");
-  }
+  if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상|밤하늘|농장|회의|모임|공원|하천|여행|역|화면|기록|주전자|창문)/.test(firstSentence)) throw new Error("요약글이 제목 주제와 맞는 장면으로 시작하지 않음");
 }
-
 function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummaries = []}) {
-  const cleanedTitle = normalizeSpaces(title).replace(/[.?!]/g, "");
-  const plan = summaryPlanForSite(site);
   const situation = situationForTitle(title, site);
-  const seed = Number.parseInt(hashText(cleanedTitle, 2), 16) || 0;
-  const suffixes = [
-    ` ${topicForSummary(title)}에 담긴 변화와 쓰임을 제목의 내용에 맞춰 알아볼게요.`,
-    ` ${topicForSummary(title)}이 오늘의 생활과 이어진 과정을 살펴볼게요.`,
-  ];
-  const templates = [
-    () => situation + " " + keyword + subjectParticle(keyword) + " 지금의 생활과 어떻게 이어졌는지 궁금해질 때가 있어요. " + plan.guide,
-    () => situation + " " + keyword + "이 우리 생활에 들어오기까지 어떤 변화가 있었는지 궁금하지 않으세요? 왜 달라졌는지 차근차근 알아볼게요. " + plan.guide,
-    () => situation + " " + keyword + "을 따라가다 보면 지금 익숙한 모습도 처음부터 당연한 것은 아니었다는 걸 알게 됩니다. 어떻게 달라졌는지 제목의 변화와 연결해 볼게요. " + plan.guide,
-  ];
-  const blocked = /출퇴근길이나 공연장|익숙한 모습 뒤에|마트에서 채소와 과일|당연하게 여기던 장면/;
-  for (let offset = 0; offset < templates.length; offset += 1) {
-    const opening = templates[(seed + offset) % templates.length];
-    for (let size = Math.min(34, cleanedTitle.length); size >= 6; size -= 1) {
-      const topic = cleanedTitle.slice(0, size).trim();
-      let summary = opening(topic);
-      if (!["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"].some((phrase) => summary.includes(phrase))) summary += " 왜 그런지 제목의 변화와 연결해 볼게요.";
-      for (const suffix of suffixes) {
-        if ([...summary].length >= 140) break;
-        if ([...summary + suffix].length <= 160) summary += suffix;
-      }
-      const shortFillers = [
-        " 의미를 살펴볼게요.",
-        " 변화를 짚어볼게요.",
-        " 핵심 흐름을 이어서 볼게요.",
-      ];
-      for (const filler of shortFillers) {
-        if ([...summary].length >= 140) break;
-        if ([...summary + filler].length <= 160) summary += filler;
-      }
-      if (blocked.test(summary)) throw new Error("제목과 무관하거나 반복된 고정 도입문이 요약글에 포함됨");
-      validateApprovalSummaryStyle(summary, {recentSummaries});
-      if ([...summary].length >= 140 && [...summary].length <= 160) return summary;
-    }
+  const topics = [topicForSummary(title), titleContentKeywords(title, keyword).slice(0, 4).join(" "), titleContentKeywords(title, keyword).slice(0, 3).join(" ")].filter(Boolean);
+  const guides = {1: "열과 움직임, 재료와 도구처럼 발명품에 담긴 원리와 생활의 변화를 살펴볼게요.", 2: "그 계절에 하늘에서 찾을 방향과 관측할 때 알아둘 점을 살펴볼게요.", 3: "수치를 확인하는 순서와 오류에 대응해 자동화에 활용하는 방법을 짚어볼게요.", 4: "그 순간 내 판단을 점검하고 나답게 대응하는 방법을 생각해 볼게요.", 5: "무엇을 확인하고 기록해야 하는지, 생태계와 어떤 관계가 있는지 살펴볼게요.", 6: "여행 중 눈여겨볼 공간과 이동 문화가 어떤 뜻인지 살펴볼게요."};
+  const endings = ["왜 이런 변화가 필요했는지 궁금해지죠.", "어떻게 지금의 모습으로 이어졌는지 궁금해질 수 있어요.", "처음에는 어떤 문제를 풀려고 했는지 생각해 보게 됩니다."];
+  for (const topic of topics) for (const ending of endings) {
+    let summary = situation + " " + keyword + "과 " + topic + "을 떠올리면 " + ending + " " + (guides[Number(site)] || "이 글에서 핵심 흐름과 확인할 내용을 살펴볼게요.");
+    for (const addition of [" 제목 속 구체적인 변화와 쓰임을 함께 짚어볼게요.", " 생활 속 장면과 연결해 핵심을 확인해 볼게요."]) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
+    if ([...summary].length >= 140 && [...summary].length <= 160) { validateApprovalSummaryStyle(summary, {recentSummaries, title}); validateTitleKeywordConnection(summary, title, keyword, "요약글"); return summary; }
   }
-  throw new Error("조건에 맞는 요약글을 만들지 못함");
+  throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
 }
-
 function topicForSummary(title) {
   return titleCoreTopic(title).replace(/[.!?]/g, "").slice(0, 34).trim();
 }
@@ -1847,7 +1800,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     키워드 ? `포커스 키워드: "${키워드}" — 첫 문단 안에 그대로 1회, h2 소제목 중 하나에 1회, 본문 곳곳에 자연스럽게 3~5회 포함한다. 억지로 반복하지 않는다.` : "",
     "요청:",
     "- 초보자가 실제로 이해하고 따라할 수 있게 작성",
-    "- 글 제목 바로 아래 첫 블록은 p 요약글로 작성한다. 공백 포함 140~160자의 한국어 한 문단이며, 한국인이 직접 겪은 경험을 섞어 이 글을 쓰는 이유와 다룰 내용을 소개한다.",
+    "- 글 제목 바로 아래 첫 블록은 p 요약글로 작성한다. 공백 포함 140~160자의 한국어 한 문단이며, 제목 문장을 풀어 쓰는 대신 제목과 맞는 생활 장면에서 시작해 궁금증·원리·이 글에서 확인할 내용을 이어 쓴다.",
     키워드 ? `- 요약글에 포커스 키워드 "${키워드}"를 정확히 1회 이상 포함한다.` : "- 요약글에 제목의 핵심 키워드를 1회 이상 포함한다.",
     "- 요약글에는 왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나 이상의 친근한 표현을 자연스럽게 포함한다.",
     "- 중간에 체크리스트 또는 단계별 절차 포함",
@@ -1913,13 +1866,13 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
       summary = buildCompliantApprovalSummary({title, keyword: 키워드, site, recentSummaries});
     }
     try {
-      validateApprovalSummaryStyle(summary, {recentSummaries});
+      validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
       validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
     } catch {
       summary = repairApprovalSummary({title, keyword: 키워드, site, recentSummaries});
-      validateApprovalSummaryStyle(summary, {recentSummaries});
+      validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
       validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
