@@ -343,8 +343,10 @@ function repairExcerptVoice(excerpt, title) {
   let repaired = normalizeSpaces(String(excerpt || ""))
     .replace(/(?:자연스럽게|쉽게)\s*(?:알아|살펴|정리)(?:보)?(?:겠습니다|봅니다|볼게요|봐요|해봅니다|해볼게요)/gu, "들여다봅니다");
   if ([...repaired].length < 100) {
-    const addition = ` ${titleCoreTopic(title)}에 담긴 원리와 변화가 오늘의 생활에 남긴 모습을 함께 살펴봅니다.`;
-    if ([...repaired + addition].length <= 140) repaired += addition;
+    const shortTopic = titleContentKeywords(title, "").slice(0, 2).join(" ") || "제목의 핵심 기술";
+    for (const addition of [` ${shortTopic}의 원리와 변화도 함께 살펴봅니다.`, " 이 글에서 핵심 원리와 변화를 살펴봅니다."]) {
+      if ([...repaired].length < 100 && [...repaired + addition].length <= 140) repaired += addition;
+    }
   }
   return repaired;
 }
@@ -1743,12 +1745,14 @@ function validateApprovalSummaryStyle(summary, {recentSummaries = [], title = ""
 }
 function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummaries = []}) {
   const situation = situationForTitle(title, site);
-  const topics = [titleContentKeywords(title, keyword).slice(0, 3).join(" "), titleContentKeywords(title, keyword).slice(0, 4).join(" "), topicForSummary(title)].filter(Boolean);
-  const guides = {1: "열과 움직임, 재료와 도구처럼 발명품에 담긴 원리와 생활의 변화를 살펴볼게요.", 2: "그 계절에 하늘에서 찾을 방향과 관측할 때 알아둘 점을 살펴볼게요.", 3: "수치를 확인하는 순서와 오류에 대응해 자동화에 활용하는 방법을 짚어볼게요.", 4: "그 순간 내 판단을 점검하고 나답게 대응하는 방법을 생각해 볼게요.", 5: "무엇을 확인하고 기록해야 하는지, 생태계와 어떤 관계가 있는지 살펴볼게요.", 6: "여행 중 눈여겨볼 공간과 이동 문화가 어떤 뜻인지 살펴볼게요."};
-  const endings = ["왜 이런 변화가 필요했는지 궁금해지죠.", "어떻게 지금의 모습으로 이어졌는지 궁금해질 수 있어요.", "처음에는 어떤 문제를 풀려고 했는지 생각해 보게 됩니다."];
+  const titleWords = titleContentKeywords(title, keyword);
+  const topics = [titleWords.slice(0, 2).join(" "), titleWords.slice(0, 3).join(" "), titleWords.slice(0, 4).join(" "), topicForSummary(title)].filter(Boolean);
+  const guides = {1: "발명품의 원리와 생활의 변화를 살펴볼게요.", 2: "별자리를 찾는 기준을 살펴볼게요.", 3: "점검 순서와 대응 방법을 짚어볼게요.", 4: "내 판단을 점검하는 방법을 생각해 볼게요.", 5: "확인과 기록의 이유를 살펴볼게요.", 6: "여행에서 볼 수 있는 의미를 살펴볼게요."};
+  const endings = ["왜 필요했는지와 어떻게 달라졌는지 궁금해집니다.", "처음 어떤 문제를 풀려고 했는지 궁금해집니다.", "오늘의 모습으로 이어진 이유가 궁금해집니다."];
+  const additions = [" 제목 속 변화가 지금의 생활과 어떻게 이어지는지도 확인해 볼게요.", " 이 글에서 핵심 흐름과 쓰임을 차분히 살펴볼게요.", " 원리와 변화가 남긴 의미를 이어서 살펴볼게요."];
   for (const topic of topics) for (const ending of endings) {
-    let summary = situation + " " + keyword + "과 " + topic + "을 떠올리면 " + ending + " " + (guides[Number(site)] || "이 글에서 핵심 흐름과 확인할 내용을 살펴볼게요.");
-    for (const addition of [" 제목 속 구체적인 변화와 쓰임을 차분히 살펴볼게요.", " 생활 속 장면과 연결해 핵심을 확인해 볼게요."]) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
+    let summary = situation + " " + keyword + "을 따라가면 " + topic + "이 " + ending + " " + (guides[Number(site)] || "이 글에서 핵심 내용을 살펴볼게요.");
+    for (const addition of additions) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
     if ([...summary].length >= 140 && [...summary].length <= 160) { validateApprovalSummaryStyle(summary, {recentSummaries, title}); validateTitleKeywordConnection(summary, title, keyword, "요약글"); return summary; }
   }
   throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
