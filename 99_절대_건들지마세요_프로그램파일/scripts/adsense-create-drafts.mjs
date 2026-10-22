@@ -1690,12 +1690,12 @@ function situationForTitle(title, site) {
   if (found) return found[1];
   const topic = titleCoreTopic(title);
   const fallback = {
-    1: "처음 만들어진 도구와 기술은 시간이 지나며 생활 속 쓰임이 달라졌습니다.",
-    2: "별을 찾을 때는 계절과 시간, 하늘 상태를 함께 확인해야 합니다.",
-    3: "재배 수치를 확인할 때는 기록과 측정 조건을 함께 봐야 합니다.",
-    4: "사람이 모인 자리에서는 주변 분위기가 내 판단에 영향을 줄 수 있습니다.",
-    5: "낯선 생물을 발견하면 생활과 생태계의 관계를 함께 살펴볼 필요가 있습니다.",
-    6: "낯선 도시에서 역을 이용할 때는 이동 동선과 공간의 특징이 눈에 들어옵니다.",
+    1: topic + objectParticle(topic) + " 보면, 처음 해결하려던 문제와 오늘의 생활에 남긴 변화가 궁금해집니다.",
+    2: topic + objectParticle(topic) + " 관측할 때에는 계절과 시간, 하늘 상태를 함께 확인해야 합니다.",
+    3: topic + objectParticle(topic) + " 확인할 때에는 기록과 측정 조건을 함께 봐야 원인을 놓치지 않습니다.",
+    4: topic + "과 관련된 상황에서는 주변 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.",
+    5: topic + objectParticle(topic) + " 살펴보면 외래 생물이 생활과 생태계에 어떻게 연결되는지 생각해 볼 수 있습니다.",
+    6: topic + objectParticle(topic) + " 보면, 덴마크의 철도시설이 여행과 도시 생활에 어떤 역할을 하는지 알 수 있습니다.",
   };
   return fallback[Number(site)] || topic + objectParticle(topic) + " 이해하려면 실제 상황과 핵심 내용을 함께 살펴볼 필요가 있습니다.";
 }
@@ -1764,9 +1764,9 @@ function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummarie
         if ([...summary + suffix].length <= 160) summary += suffix;
       }
       const shortFillers = [
-        " 처음의 원리와 바뀐 쓰임도 함께 살펴볼게요.",
-        " 그 변화가 남긴 생활 속 의미도 짚어볼게요.",
-        " 제목의 배경과 핵심 흐름을 이어서 살펴볼게요.",
+        " 의미를 살펴볼게요.",
+        " 변화를 짚어볼게요.",
+        " 핵심 흐름을 이어서 볼게요.",
       ];
       for (const filler of shortFillers) {
         if ([...summary].length >= 140) break;
