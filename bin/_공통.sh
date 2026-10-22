@@ -15,7 +15,7 @@
 #   MAKEIT_KIT_MAINTAINER=1 이면 통과 (운영진이 원본에서 점검할 때)
 guard_template_repo() {
   local root="${1:-.}"
-  local template="makeit-edu/makeit-middle-kit"
+  local template="seongsung54-maker/sse"
   local origin
   origin="$(git -C "$root" remote get-url origin 2>/dev/null)"
 
@@ -44,7 +44,7 @@ guard_template_repo() {
   echo "   ${B}내 작업방을 만들어 주세요. 2분이면 됩니다.${OFF}"
   echo ""
   echo "     ${CYAN}1)${OFF} 아래 주소를 열기 ${B}(내 저장소 만들기 화면이 바로 열려요)${OFF}"
-  echo "        ${B}https://github.com/new?template_name=makeit-middle-kit&template_owner=makeit-edu${OFF}"
+  echo "        ${B}https://github.com/seongsung54-maker/sse${OFF}"
   echo "     ${CYAN}2)${OFF} 이름을 정하고 ${B}Private${OFF} 확인 → ${B}Create repository${OFF}"
   echo "     ${CYAN}3)${OFF} 새로 만든 ${B}내 저장소${OFF}에서 ${B}Code → Codespaces → Create${OFF}"
   echo "     ${CYAN}4)${OFF} 지금 이 작업방은 ${B}github.com/codespaces${OFF} 에서 지우기"
