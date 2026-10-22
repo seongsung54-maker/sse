@@ -8,7 +8,7 @@ import {mkdir, readFile, readdir, rm, writeFile} from "node:fs/promises";
 import {homedir} from "node:os";
 import {join} from "node:path";
 
-const 저장소 = "makeit-edu/makeit-middle-kit";
+const 저장소 = "seongsung54-maker/sse";
 const 시작표 = "<!-- 메킷키트 시작 (설치.mjs 가 관리. 손으로 고치지 마세요) -->";
 const 끝표 = "<!-- 메킷키트 끝 -->";
 // 대본 판 번호. 지금은 승인글·네이버·메킷애센을 합친 판 4. 더 높은 판이 깔려 있으면 낮은 판으로 덮지 않는다 (같은 판이면 새것으로).
@@ -37,13 +37,13 @@ export async function 설치({작업폴더}) {
   const 기록 = {};
   const 대본 = await 대본받기();
 
-  // 코덱스가 README 를 읽으려고 저장소를 통째로 내려받는 경우가 있다 (2026-09-23 실측: 작업 폴더 안에 makeit-middle-kit-naver/ 를 git clone).
+  // 코덱스가 README 를 읽으려고 저장소를 통째로 내려받는 경우가 있다 (2026-09-23 실측: 작업 폴더 안에 sse-naver/ 를 git clone).
   // 그러면 프로그램 파일이 수강생 PC 에 남는다. 우리 저장소 사본(폴더 이름 + .git 원격 주소 둘 다 맞을 때만)은 지운다.
   try {
     for (const 이름 of await readdir(작업폴더)) {
-      if (!/^makeit-middle-kit(-naver)?$/.test(이름)) continue;
+      if (!/^sse(-naver)?$/.test(이름)) continue;
       const 깃설정 = await readFile(join(작업폴더, 이름, ".git", "config"), "utf8").catch(() => "");
-      if (!/github\.com[/:]makeit-edu\/makeit-middle-kit(-naver)?(\.git)?\b/.test(깃설정)) continue;
+      if (!/github\.com[/:]seongsung54-maker\/sse(-naver)?(\.git)?\b/.test(깃설정)) continue;
       await rm(join(작업폴더, 이름), {recursive: true, force: true});
       기록[`내려받은 저장소 사본 ${이름}`] = "정리";
     }
