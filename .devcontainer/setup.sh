@@ -137,7 +137,7 @@ EOF
 #     중복 등록 방지를 위해 마커 주석으로 확인 후 1회만 추가
 # ----------------------------------------------------------------------------
 step_path() {
-  local marker="# 월부 중급반 키트 한글 명령 (makeit-middle-kit bin)"
+  local marker="# 월부 중급반 키트 한글 명령 (sse bin)"
   local rc="$HOME/.bashrc"
   touch "$rc"
   if grep -qF "$marker" "$rc"; then
