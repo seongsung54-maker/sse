@@ -1632,6 +1632,10 @@ function situationForTitle(title, site) {
       [["주판", "계산"], "금액을 계산하거나 숫자를 정리할 때에는 계산 도구가 어떻게 달라졌는지 생각해 볼 수 있습니다."],
       [["도르래", "크랭크", "기계"], "엘리베이터와 자전거처럼 힘과 움직임이 바뀌는 장면에는 기계 장치의 원리가 숨어 있습니다."],
       [["가전"], "세탁기나 청소기로 집안일을 할 때에는 생활을 바꾼 발명품의 역할을 확인할 수 있습니다."],
+      [["전지", "전기"], "휴대전화를 충전하거나 손전등을 켤 때에는 전기가 오래 이어지는 일이 당연하게 느껴집니다."],
+      [["풍력", "바람"], "바람에 흔들리는 나뭇가지나 풍차를 보면 보이지 않는 힘을 어떻게 움직임에 쓰는지 궁금해집니다."],
+      [["증기", "증기기관"], "주전자에서 올라오는 김을 보면 열과 압력이 어떻게 큰 움직임으로 바뀌는지 궁금해집니다."],
+      [["캠", "반복"], "시계나 장난감이 같은 동작을 되풀이하는 모습을 보면 움직임을 만드는 장치가 궁금해집니다."],
     ],
     2: [
       [["망원경"], "망원경으로 별자리를 찾을 때에는 넓은 하늘에서 어느 범위를 먼저 볼지 막막할 수 있습니다."],
@@ -1724,7 +1728,7 @@ function validateApprovalSummaryStyle(summary, {recentSummaries = [], title = ""
 }
 function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummaries = []}) {
   const situation = situationForTitle(title, site);
-  const topics = [topicForSummary(title), titleContentKeywords(title, keyword).slice(0, 4).join(" "), titleContentKeywords(title, keyword).slice(0, 3).join(" ")].filter(Boolean);
+  const topics = [titleContentKeywords(title, keyword).slice(0, 3).join(" "), titleContentKeywords(title, keyword).slice(0, 4).join(" "), topicForSummary(title)].filter(Boolean);
   const guides = {1: "열과 움직임, 재료와 도구처럼 발명품에 담긴 원리와 생활의 변화를 살펴볼게요.", 2: "그 계절에 하늘에서 찾을 방향과 관측할 때 알아둘 점을 살펴볼게요.", 3: "수치를 확인하는 순서와 오류에 대응해 자동화에 활용하는 방법을 짚어볼게요.", 4: "그 순간 내 판단을 점검하고 나답게 대응하는 방법을 생각해 볼게요.", 5: "무엇을 확인하고 기록해야 하는지, 생태계와 어떤 관계가 있는지 살펴볼게요.", 6: "여행 중 눈여겨볼 공간과 이동 문화가 어떤 뜻인지 살펴볼게요."};
   const endings = ["왜 이런 변화가 필요했는지 궁금해지죠.", "어떻게 지금의 모습으로 이어졌는지 궁금해질 수 있어요.", "처음에는 어떤 문제를 풀려고 했는지 생각해 보게 됩니다."];
   for (const topic of topics) for (const ending of endings) {
