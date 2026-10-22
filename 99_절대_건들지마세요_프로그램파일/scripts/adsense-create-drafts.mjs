@@ -351,6 +351,17 @@ function repairExcerptVoice(excerpt, title) {
   return repaired;
 }
 
+function validateExcerptSituationMatch(summary, meta) {
+  const bodySummary = normalizeSpaces(stripTags(summary));
+  const excerpt = normalizeSpaces(stripTags(meta?.excerpt || ""));
+  const sceneAnchor = normalizeSpaces(meta?.sceneAnchor || "");
+  if (!bodySummary) throw new Error("요약글이 없어 발췌문의 상황 장면을 확인할 수 없음");
+  if (sceneAnchor.length < 2) throw new Error("발췌문에 요약글 상황 장면 기준이 없음");
+  if (!bodySummary.includes(sceneAnchor)) throw new Error("발췌문 상황 장면 기준이 요약글 첫 문장에 없음");
+  if (!excerpt.includes(sceneAnchor)) throw new Error("워드프레스 발췌문이 요약글과 같은 상황 장면에서 시작하지 않음");
+  if (excerpt === bodySummary) throw new Error("워드프레스 발췌문이 요약글을 그대로 복사함");
+}
+
 function validateExcerpt(excerpt, focusKeyword, title = "") {
   const text = normalizeSpaces(stripTags(excerpt));
   validateHumanVoice(text, "워드프레스 발췌문");
@@ -865,6 +876,7 @@ function ensureMetaDefaults(meta, title) {
   const featuredImageCaption = normalizeSpaces(meta?.featuredImageCaption || `${focusKeyword}의 핵심 내용을 시각적으로 정리한 이미지입니다.`).slice(0, 140);
   // 이미지 장면은 영어만 받는다. 한글이 섞이면 모델이 글자로 그리므로(2026-09-21 진현님: 이미지에 어떤 언어 글자도 금지) 한글이 있으면 버린다.
   const imageScene = /[\u3131-\uD79D]/.test(String(meta?.imageScene || "")) ? "" : normalizeSpaces(meta?.imageScene || "").slice(0, 400);
+  const sceneAnchor = normalizeSpaces(meta?.sceneAnchor || "").slice(0, 24);
 
   return {
     slug,
@@ -874,6 +886,7 @@ function ensureMetaDefaults(meta, title) {
     featuredImageAlt,
     featuredImageCaption,
     imageScene,
+    sceneAnchor,
   };
 }
 
@@ -1224,7 +1237,7 @@ async function fetchWordPressCategories({siteUrl, username, appPassword}) {
   return collected;
 }
 
-async function generatePostMeta({apiKey, model, title, 고정키워드 = "", site = 0}) {
+async function generatePostMeta({apiKey, model, title, 고정키워드 = "", site = 0, summary = ""}) {
   const systemPrompt = [
     "너는 한국어 글 제목을 보고 워드프레스 발행 메타를 만드는 편집자다.",
     "반드시 JSON 객체만 출력한다. 설명, 코드블록, 마크다운은 출력하지 않는다.",
@@ -1234,20 +1247,23 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = "", sit
     "categoryHint는 글을 넣을 워드프레스 카테고리를 고르기 위한 한국어 주제 힌트여야 한다.",
     "imageScene은 대표이미지로 그릴 장면을 영어로 1~2문장 묘사한 것이어야 한다. 사물·상황·분위기만 쓰고, 글자·간판·문서·화면·책 등 읽을 수 있는 텍스트가 나올 만한 장면은 피한다. 사람 얼굴은 넣지 않는다.",
     "excerpt는 워드프레스 발췌문이다. 딱딱한 설명문이 아니라 일상에서 떠올릴 수 있는 장면으로 시작하는 자연스러운 해요체 한국어 문장으로 작성한다.",
+    "sceneAnchor는 요약글 첫 문장에 실제로 있는 2~24자의 짧은 상황 장면 표현이다. excerpt에는 sceneAnchor를 그대로 포함해 두 문장이 같은 장면에서 출발하게 한다.",
   ].join("\n");
 
   const userPrompt = [
     `글 제목: ${title}`,
     `사이트별 말투: ${siteVoiceGuide(site)}`,
     `사이트별 발췌문 작성 순서: ${siteWritingFlow(site, "excerpt")}`,
+    summary ? `확정된 본문 요약글: ${summary}` : "",
     "작성 순서는 문장을 복사하는 틀이 아니다. 제목의 구체적인 대상과 맞는 장면·내용을 새로 고르고, 제목과 무관한 공통 도입문이나 빈 끝맺음은 쓰지 않는다.",
-    "발췌문은 본문·요약글과 같은 화자가 말하는 것처럼 작성한다. 제목을 설명문으로 풀어 쓰며 시작하지 말고, 제목에 맞는 장면과 그 장면에서 생길 궁금증으로 시작한다. 요약글과 문장을 그대로 복사하지 않되, 요약글과 같은 상황 장면을 유지하고 더 짧은 표현으로 쓴다. 작성 방식을 설명하는 틀 문장은 쓰지 않는다.",
+    "발췌문은 본문·요약글과 같은 화자가 말하는 것처럼 작성한다. 제목을 설명문으로 풀어 쓰며 시작하지 말고, 제목에 맞는 장면과 그 장면에서 생길 궁금증으로 시작한다. 요약글과 문장을 그대로 복사하지 않되, 요약글 첫 문장의 상황 장면을 sceneAnchor로 정확히 뽑아 excerpt에 그대로 넣고 더 짧은 표현으로 쓴다. 작성 방식을 설명하는 틀 문장은 쓰지 않는다.",
     고정키워드 ? `포커스 키워드는 "${고정키워드}" 로 정해져 있다. focusKeyword 에 그대로 쓰고, excerpt 와 featuredImageAlt 에 이 문구를 자연스럽게 1회 포함해라.` : "",
     "발췌문은 공백 포함 100~140자(약 120자)로 쓴다. 메인키워드를 반드시 1회 이상 넣고, 글의 내용을 건조하게 요약하지 말고 일상에서 공감할 수 있는 상황과 이 글에서 알게 될 내용을 자연스럽게 이어 쓴다. '독자'라는 단어와 HTML·마크다운은 쓰지 않는다.",
     "아래 JSON 형식으로만 답해.",
     "{",
     '  "slug": "semantic-english-slug",',
     '  "excerpt": "120자 안팎의 한국어 요약문",',
+    '  "sceneAnchor": "요약글 첫 문장에서 뽑은 2~24자의 상황 장면 표현",',
     '  "focusKeyword": "대표키워드 한국어 1개",',
     '  "categoryHint": "카테고리 선택용 한국어 주제 힌트",',
     '  "featuredImageAlt": "대표키워드를 자연스럽게 1회 포함한 대표이미지 대체 텍스트 한국어 1문장",',
@@ -2234,16 +2250,25 @@ for (let index = 0; index < titles.length; index += 1) {
     단계(index + 1, titles.length, "제목·키워드 정리하는 중");
     let meta = fallbackPostMeta(title);
     let metaUsage = {inputTokens: 0, outputTokens: 0, totalTokens: 0};
+    const 이글키워드 = 대주제 && normalizeSpaces(title).includes(대주제) ? 대주제 : meta.focusKeyword;
 
-    // 메타 발췌문이 조건에 맞지 않으면 새로 만들고, 세 번 모두 실패하면 저장하지 않는다.
+    // 최초 원고는 한 번만 만든다. 이후에는 같은 원고의 오류 부분만 고쳐 세 번까지 재검사한다.
+    단계(index + 1, titles.length, "본문 쓰는 중 (보통 1~2분)");
+    const recentSummaries = [...previousDraftHistory, ...results]
+      .filter((item) => item.ok && normalizeSpaces(item.summary || ""))
+      .map((item) => item.summary);
+    const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: 이글키워드, site, recentSummaries});
+    let html = made.html;
+    let articleUsage = made.usage;
+    let articleSummary = made.summary || "";
+
+    // 요약글을 먼저 확정한 뒤, 그 장면을 그대로 전달해 발췌문을 만든다.
     for (let 시도 = 1; 시도 <= 3; 시도 += 1) {
       try {
-        const 이글키워드 = 대주제 && normalizeSpaces(title).includes(대주제) ? 대주제 : "";
-        const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드, site});
-        meta = generatedMeta.meta;
-        if (이글키워드) meta = {...meta, focusKeyword: 이글키워드};
-        meta = {...meta, excerpt: repairExcerptVoice(meta.excerpt, title)};
+        const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드, site, summary: articleSummary});
+        meta = {...generatedMeta.meta, focusKeyword: 이글키워드, excerpt: repairExcerptVoice(generatedMeta.meta.excerpt, title)};
         validateExcerpt(meta.excerpt, meta.focusKeyword, title);
+        validateExcerptSituationMatch(articleSummary, meta);
         metaUsage = generatedMeta.usage;
         break;
       } catch (metaError) {
@@ -2251,15 +2276,6 @@ for (let index = 0; index < titles.length; index += 1) {
       }
     }
 
-    // 최초 원고는 한 번만 만든다. 이후에는 같은 원고의 오류 부분만 고쳐 세 번까지 재검사한다.
-    단계(index + 1, titles.length, "본문 쓰는 중 (보통 1~2분)");
-    const recentSummaries = [...previousDraftHistory, ...results]
-      .filter((item) => item.ok && normalizeSpaces(item.summary || ""))
-      .map((item) => item.summary);
-    const made = await generateArticle({apiKey: env.OPENAI_API_KEY, model, title, minChars, 키워드: meta.focusKeyword, site, recentSummaries});
-    let html = made.html;
-    let articleUsage = made.usage;
-    let articleSummary = made.summary || "";
     let 통과 = false;
     let 마지막오류 = "";
 
@@ -2278,6 +2294,7 @@ for (let index = 0; index < titles.length; index += 1) {
         validateArticleHtml(html, title, {minChars, focusKeyword: meta.focusKeyword});
         validateApprovalSummaryMatch(html, articleSummary, meta.focusKeyword);
         validateExcerpt(meta.excerpt, meta.focusKeyword, title);
+        validateExcerptSituationMatch(articleSummary, meta);
         통과 = true;
         break;
       } catch (repairError) {
@@ -2308,6 +2325,7 @@ for (let index = 0; index < titles.length; index += 1) {
     validateArticleHtml(htmlWithImage, title, {minChars, focusKeyword: meta.focusKeyword});
     validateApprovalSummaryMatch(htmlWithImage, articleSummary, meta.focusKeyword);
     validateExcerpt(meta.excerpt, meta.focusKeyword, title);
+    validateExcerptSituationMatch(articleSummary, meta);
     validateInlineImageBlock(htmlWithImage, featuredMedia);
     const localPath = join(outputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
     const visiblePath = join(visibleOutputDir, `${String(index + 1).padStart(3, "0")}_${safeFilename(title)}.html`);
