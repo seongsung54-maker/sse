@@ -1643,7 +1643,7 @@ function summaryPlanForSite(site) {
   return plans[Number(site)] || {reader: "관련 정보를 처음 확인하는 독자", outcome: "핵심을 이해하는 데 필요한 관점"};
 }
 
-function situationForTitle(title, site) {
+function situationForTitle(title, site, recentSummaries = []) {
   const text = normalizeSpaces(title).toLowerCase();
   const situations = {
     1: [
@@ -1695,7 +1695,7 @@ function situationForTitle(title, site) {
     ],
   };
   const found = (situations[Number(site)] || []).find(([tokens]) => tokens.every((token) => text.includes(token)));
-  if (found) return found[1];
+  if (found && !summaryOpeningIsRepeated(found[1], recentSummaries)) return found[1];
   const topic = titleCoreTopic(title);
   const fallback = {
     1: topic + objectParticle(topic) + " 보면, 처음 해결하려던 문제와 오늘의 생활에 남긴 변화가 궁금해집니다.",
@@ -1715,7 +1715,37 @@ function situationForTitle(title, site) {
     6: ["낯선 도시의 역에 들어서면 이동 동선과 공간의 분위기가 먼저 눈에 들어옵니다.", "여행 중 환승을 할 때에는 역이 도시 생활과 어떻게 이어지는지 궁금해집니다."],
   };
   const choices = generalScenes[Number(site)] || ["생활 속 장면을 보면 그 뒤에 담긴 원리가 궁금해집니다."];
-  return choices[Number.parseInt(hashText(topic, 2), 16) % choices.length];
+  const alternateScenes = {
+    1: [
+      "우산을 펼칠 때 살대가 한꺼번에 움직이는 모습을 보면 작은 장치가 힘을 나누는 방식이 궁금해집니다.",
+      "냉장고 문을 열고 닫을 때 경첩이 조용히 버티는 모습을 보면 익숙한 구조의 시작이 궁금해집니다.",
+      "연필깎이를 돌릴 때 나무가 고르게 깎이는 모습을 보면 반복 움직임을 만든 원리가 궁금해집니다.",
+      "신호등이 차례로 바뀌는 길목을 지나면 여러 장치가 맞춰 움직이는 방법이 궁금해집니다.",
+      "공원 분수에서 물줄기가 높이 올라오는 모습을 보면 물의 힘을 다루는 기술이 궁금해집니다.",
+      "주방 타이머 소리를 들으면 일정한 움직임을 재는 장치가 처음 어떻게 만들어졌는지 궁금해집니다.",
+      "자전거 체인이 바퀴를 돌리는 모습을 보면 힘이 다른 방향으로 이어지는 과정이 궁금해집니다.",
+      "벽시계 초침이 멈추지 않고 움직이면 작은 부품들이 맞물리는 방식이 궁금해집니다.",
+      "엘리베이터 버튼을 누르고 문이 닫히는 순간을 보면 생활 속 기계가 움직이는 원리가 궁금해집니다.",
+      "빨래집게가 옷감을 단단히 잡는 모습을 보면 간단한 도구에도 어떤 생각이 담겼는지 궁금해집니다.",
+      "책장을 넘기다 오래된 그림을 보면 당시 사람들은 필요한 일을 어떤 도구로 해결했는지 궁금해집니다.",
+      "공방에서 나무 조각이 다듬어지는 모습을 보면 손작업을 바꾼 기계의 시작이 궁금해집니다.",
+      "다리 위 차량이 끊임없이 지나가는 모습을 보면 무거운 것을 움직이게 한 기술이 궁금해집니다.",
+      "창문 손잡이를 돌려 공기가 들어오는 모습을 보면 작은 움직임을 만든 장치가 궁금해집니다.",
+      "가방 지퍼를 여닫을 때 톱니가 맞물리는 모습을 보면 단순한 구조가 생활을 바꾼 과정이 궁금해집니다."
+    ],
+    2: ["밤 산책 중 별 하나가 유난히 밝게 보이면 어느 계절 하늘인지 궁금해집니다.", "캠핑장에서 하늘을 올려다보면 익숙한 별도 위치를 다시 찾고 싶어집니다."],
+    3: ["온실 온도계 숫자가 평소와 다르면 어느 조건부터 살펴야 할지 고민하게 됩니다.", "관수 장치가 돌아가는 시간을 보면 센서 값이 재배에 어떻게 이어지는지 궁금해집니다."],
+    4: ["여럿이 박수를 치는 자리에서는 나도 모르게 같은 반응을 하게 될 때가 있습니다.", "온라인 댓글이 빠르게 늘어나면 처음 생각과 다른 판단을 하게 될 수 있습니다."],
+    5: ["화단에서 처음 보는 곤충을 만나면 이름과 이동 경로부터 궁금해집니다.", "산책 중 낯선 식물을 보면 우리 주변에 언제부터 있었는지 생각해 보게 됩니다."],
+    6: ["기차 창밖으로 역을 지나면 이동 공간이 도시 모습과 어떻게 이어지는지 궁금해집니다.", "여행지에서 플랫폼 표지판을 보면 낯선 역의 동선이 먼저 눈에 들어옵니다."]
+  };
+  const candidates = [...choices, ...(alternateScenes[Number(site)] || [])];
+  const start = Number.parseInt(hashText(topic, 2), 16) % candidates.length;
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const candidate = candidates[(start + offset) % candidates.length];
+    if (!summaryOpeningIsRepeated(candidate, recentSummaries)) return candidate;
+  }
+  return candidates[start];
 }
 
 const BANNED_APPROVAL_SUMMARY_PHRASES = [
@@ -1760,7 +1790,7 @@ function validateApprovalSummaryStyle(summary, {recentSummaries = [], title = ""
   if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상|밤하늘|농장|회의|모임|공원|하천|여행|역|화면|기록|주전자|창문)/.test(firstSentence)) throw new Error("요약글이 제목 주제와 맞는 장면으로 시작하지 않음");
 }
 function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummaries = []}) {
-  const situation = situationForTitle(title, site);
+  const situation = situationForTitle(title, site, recentSummaries);
   const titleWords = titleContentKeywords(title, keyword);
   const topics = [titleWords.slice(0, 2).join(" "), titleWords.slice(0, 3).join(" "), titleWords.slice(0, 4).join(" "), topicForSummary(title)].filter(Boolean);
   const guides = {1: "발명품의 원리와 생활의 변화를 살펴볼게요.", 2: "별자리를 찾는 기준을 살펴볼게요.", 3: "점검 순서와 대응 방법을 짚어볼게요.", 4: "내 판단을 점검하는 방법을 생각해 볼게요.", 5: "확인과 기록의 이유를 살펴볼게요.", 6: "여행에서 볼 수 있는 의미를 살펴볼게요."};
