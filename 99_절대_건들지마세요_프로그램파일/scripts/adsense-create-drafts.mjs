@@ -148,9 +148,17 @@ function compactKoreanPhrase(title) {
     .replace(/[()[\]{}"'“”‘’!?.,:;|/\\]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (!cleaned) return "핵심 정리";
+  if (!cleaned) return "핵심 내용";
   const words = cleaned.split(" ").slice(0, 3).join(" ");
-  return words.length > 18 ? `${words.slice(0, 18).trim()} 정리` : `${words} 정리`;
+  return words.length > 18 ? words.slice(0, 18).trim() : words;
+}
+
+function titleCoreTopic(title) {
+  const cleaned = normalizeSpaces(String(title).replace(/[.?!]/g, ""));
+  const withoutGuide = cleaned
+    .replace(/\s*(?:을|를)\s*(?:역사 속 발명|계절별 별자리|농업용 센서|군중 심리|외래 생물|덴마크의 철도시설)(?:으로|로)?\s*(?:알아|살펴|정리|이해).*/u, "")
+    .trim();
+  return withoutGuide || compactKoreanPhrase(cleaned);
 }
 
 function introHeadingForTitle(title) {
@@ -1680,16 +1688,16 @@ function situationForTitle(title, site) {
   };
   const found = (situations[Number(site)] || []).find(([tokens]) => tokens.every((token) => text.includes(token)));
   if (found) return found[1];
-  const topic = compactKoreanPhrase(title);
+  const topic = titleCoreTopic(title);
   const fallback = {
-    1: topic + "처럼 익숙한 도구나 기술을 볼 때에는 지금 모습에 이르기까지 어떤 발명과 변화가 있었는지 궁금해질 수 있습니다.",
-    2: topic + "을 관측할 때에는 계절과 시간, 하늘 상태를 함께 확인할 필요가 있습니다.",
-    3: topic + "을 확인할 때에는 한 번의 수치보다 기록과 측정 조건을 함께 봐야 합니다.",
-    4: topic + "과 관련된 상황에서는 주변의 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.",
-    5: topic + "을 살펴보면 외래생물이 생활과 생태계에 어떻게 연결되는지 생각해 볼 수 있습니다.",
-    6: topic + "을 보면 덴마크의 철도시설이 여행과 도시 생활에 어떤 역할을 하는지 알 수 있습니다.",
+    1: topic + objectParticle(topic) + " 보면, 처음 어떤 문제를 풀기 위해 만들어진 기술인지와 오늘의 생활에 이어진 변화를 생각해 볼 수 있습니다.",
+    2: topic + objectParticle(topic) + " 관측할 때에는 계절과 시간, 하늘 상태를 함께 확인해야 별자리를 더 쉽게 찾을 수 있습니다.",
+    3: topic + objectParticle(topic) + " 확인할 때에는 한 번의 수치보다 기록과 측정 조건을 함께 봐야 원인을 놓치지 않습니다.",
+    4: topic + "과 관련된 상황에서는 주변 분위기와 다른 사람의 선택이 내 판단에 영향을 줄 수 있습니다.",
+    5: topic + objectParticle(topic) + " 살펴보면 외래 생물이 생활과 생태계에 어떻게 연결되는지 생각해 볼 수 있습니다.",
+    6: topic + objectParticle(topic) + " 보면, 덴마크의 철도시설이 여행과 도시 생활에 어떤 역할을 하는지 알 수 있습니다.",
   };
-  return fallback[Number(site)] || topic + "을 이해하려면 실제 상황과 핵심 내용을 함께 살펴볼 필요가 있습니다.";
+  return fallback[Number(site)] || topic + objectParticle(topic) + " 이해하려면 실제 상황과 핵심 내용을 함께 살펴볼 필요가 있습니다.";
 }
 
 const BANNED_APPROVAL_SUMMARY_PHRASES = [
@@ -1723,7 +1731,7 @@ function validateApprovalSummaryStyle(summary, {recentSummaries = []} = {}) {
   if (summaryOpeningIsRepeated(text, recentSummaries)) {
     throw new Error("요약글의 첫 문장이 이전 요약글과 반복됨");
   }
-  if (/(정리을|정리와|정리이|발명가 남긴)/.test(text)) throw new Error("요약글에 제목을 잘못 잘라 붙인 문장이 있음");
+  if (/(정리처럼|정리을|정리와|정리이|발명가 남긴)/.test(text)) throw new Error("요약글에 제목을 잘못 잘라 붙인 문장이 있음");
   const firstSentence = text.split(/[.!?]/)[0] || "";
   if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상)/.test(firstSentence)) {
     throw new Error("요약글이 일상생활 장면으로 시작하지 않음");
@@ -1764,7 +1772,7 @@ function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummarie
 }
 
 function topicForSummary(title) {
-  return compactKoreanPhrase(title).replace(/[.!?]/g, "").slice(0, 34).trim();
+  return titleCoreTopic(title).replace(/[.!?]/g, "").slice(0, 34).trim();
 }
 
 function repairApprovalSummary({title, keyword, site, recentSummaries = []}) {
