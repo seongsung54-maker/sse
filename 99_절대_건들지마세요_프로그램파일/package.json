@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "config": {
-    "templateRepo": "https://github.com/makeit-edu/makeit-middle-kit.git"
+    "templateRepo": "https://github.com/seongsung54-maker/sse.git"
   },
   "scripts": {
     "doctor": "node scripts/doctor.mjs",
