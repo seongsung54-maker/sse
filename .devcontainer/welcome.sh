@@ -47,7 +47,7 @@ esac
 #    하지만 쓰기 권한이 없어 '저장'이 거부되고, 30일 뒤 작업방이 사라질 때
 #    작업물이 통째로 없어진다. 본인은 잘 되는 줄 알고 몇 주를 쓰게 되므로
 #    첫 화면에서 크게 잡아 준다. (원본 주인인 운영진은 정상 작업이라 경고만 한다)
-TEMPLATE_REPO="makeit-edu/makeit-middle-kit"
+TEMPLATE_REPO="seongsung54-maker/sse"
 ORIGIN_URL="$(git -C "$ROOT" remote get-url origin 2>/dev/null)"
 case "$ORIGIN_URL" in
   *"$TEMPLATE_REPO"*) ON_TEMPLATE=1 ;;
