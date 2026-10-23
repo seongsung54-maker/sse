@@ -378,7 +378,7 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expe
   validateHumanVoice(stripTags(html), "본문");
   if (!/<!--\s*wp:/i.test(html)) throw new Error("본문에 Gutenberg 블록 주석이 없음");
   validateGutenbergBlockStructure(html);
-  if (/<ol\\b/i.test(html) || /<!--\\s*\\/?wp:ol\\b/i.test(html)) throw new Error("본문에 번호 목록이 남아 있음");
+  if (/<ol\b/i.test(html) || /<!--\s*\/?wp:ol\b/i.test(html)) throw new Error("본문에 번호 목록이 남아 있음");
   const firstH2 = html.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
   if (!firstH2) throw new Error("본문 첫 소제목 h2를 찾지 못함");
   const firstH2Text = stripTags(firstH2[1]);
