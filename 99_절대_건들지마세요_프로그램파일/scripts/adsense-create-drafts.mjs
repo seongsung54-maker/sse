@@ -523,6 +523,9 @@ function validateGutenbergBlockStructure(html) {
     const name = comment[2].toLowerCase();
     const selfClosing = comment[3] === "/";
     if (!allowed.has(name)) throw new Error(`허용되지 않는 Gutenberg 블록이 있음 (${name})`);
+    // 대표 이미지 블록은 이미지 수·URL·삽입 여부를 별도 검사한다.
+    // 워드프레스가 이미지 주석을 자체 닫힘 형태로 바꿔도 문단 블록 구조와 섞어 판정하지 않는다.
+    if (name === "image") continue;
     if (selfClosing) throw new Error(`자체 닫힘 Gutenberg 블록은 사용할 수 없음 (${name})`);
     if (closing) {
       const open = stack.pop();
