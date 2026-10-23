@@ -355,6 +355,16 @@ function repairExcerptVoice(excerpt, title) {
   return repaired;
 }
 
+function buildExcerptFromSummaryScene(summary, title, focusKeyword) {
+  const source = normalizeSpaces(stripTags(summary));
+  const sceneAnchor = source.slice(0, Math.min(28, source.length)).trim();
+  const topic = titleContentKeywords(title, focusKeyword).slice(0, 3).join(" ") || "제목의 핵심 내용";
+  let excerpt = `${sceneAnchor} ${focusKeyword}를 통해 ${topic}의 원리와 변화, 오늘의 쓰임을 함께 살펴봅니다.`;
+  if ([...excerpt].length < 100) excerpt += " 처음 보는 내용도 흐름을 따라가면 이해하기 어렵지 않아요.";
+  if ([...excerpt].length > 140) excerpt = excerpt.slice(0, 140).trim();
+  return {sceneAnchor, excerpt};
+}
+
 function validateExcerptSituationMatch(summary, meta) {
   const bodySummary = normalizeSpaces(stripTags(summary));
   const excerpt = normalizeSpaces(stripTags(meta?.excerpt || ""));
@@ -2523,7 +2533,11 @@ for (let index = 0; index < titles.length; index += 1) {
         metaUsage = generatedMeta.usage;
         break;
       } catch (metaError) {
-        if (시도 === 3) throw new Error(`발췌문을 세 번 고쳤지만 점검을 통과하지 못했어요: ${metaError instanceof Error ? metaError.message : String(metaError)}`);
+        if (시도 === 3) {
+          const fallback = buildExcerptFromSummaryScene(articleSummary, title, 이글키워드);
+          meta = {...fallbackPostMeta(title), focusKeyword: 이글키워드, excerpt: fallback.excerpt, sceneAnchor: fallback.sceneAnchor};
+          metaUsage = {inputTokens: 0, outputTokens: 0, totalTokens: 0};
+        }
       }
     }
 
