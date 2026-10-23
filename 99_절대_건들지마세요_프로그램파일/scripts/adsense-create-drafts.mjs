@@ -475,6 +475,45 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expe
   validateImageBlocks(html, {expectedCount: expectedImages});
 }
 
+function collectFullDraftErrors(html, title, {minChars = 0, focusKeyword = "", expectedImages = null, summary = "", meta = null} = {}) {
+  const errors = [];
+  const check = (fn) => {
+    try { fn(); } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!errors.includes(message)) errors.push(message);
+    }
+  };
+  // 한 번의 전체 검사에서 본문·요약글·발췌문 관련 조건을 모두 확인한다.
+  check(() => validateArticleHtml(html, title, {minChars, focusKeyword, expectedImages}));
+  if (summary) check(() => validateApprovalSummaryMatch(html, summary, focusKeyword));
+  if (meta?.excerpt) {
+    check(() => validateExcerpt(meta.excerpt, focusKeyword, title));
+    if (summary) check(() => validateExcerptSituationMatch(summary, meta));
+  }
+  return errors;
+}
+
+async function reviseSameDraft({apiKey, model, title, html, errors, focusKeyword = ""}) {
+  const response = await fetch(openAiResponsesUrl(), {
+    method: "POST",
+    headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
+    body: JSON.stringify({
+      model,
+      input: [
+        {role: "system", content: "기존 승인글 원고를 고치는 편집자다. 새 글을 쓰지 말고 기존 사실과 구성을 최대한 유지한다. Gutenberg HTML만 출력한다. 번호 목록, Q./A. 표기, 중복 소제목, 굵은 포커스 키워드를 쓰지 않는다."},
+        {role: "user", content: [`제목: ${title}`, focusKeyword ? `포커스 키워드: ${focusKeyword}` : "", "아래 오류를 모두 한 번에 고쳐라:", ...errors.map((error) => `- ${error}`), "", "기존 원고:", html].filter(Boolean).join("\n")},
+      ],
+      max_output_tokens: Number(env.ARTICLE_MAX_OUTPUT_TOKENS || 12000),
+    }),
+  });
+  const body = await response.text();
+  const data = JSON.parse(body);
+  if (!response.ok) throw new Error(`원고 수정 API 실패: ${data.error?.message || body.slice(0, 200)}`);
+  const revised = normalizeArticleHtml(extractOutputText(data), title);
+  if (!revised) throw new Error("수정한 원고가 비어 있음");
+  return {html: repairDraftCandidate(revised, title, focusKeyword), usage: extractUsage(data)};
+}
+
 function validateGutenbergBlockStructure(html) {
   const allowed = new Set(["paragraph", "heading", "list", "table", "image"]);
   const stack = [];
@@ -2069,13 +2108,13 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
       validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
-      validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+      // 전체 본문 검사는 아래의 수정·재검증 순환에서 한꺼번에 한다.
     } catch {
       summary = repairApprovalSummary({title, keyword: 키워드, site, recentSummaries});
       validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
-      validateArticleHtml(html, title, {minChars: 0, focusKeyword: 키워드});
+      // 전체 본문 검사는 아래의 수정·재검증 순환에서 한꺼번에 한다.
     }
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
     return {html, summary, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
