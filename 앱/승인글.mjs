@@ -15,7 +15,7 @@ import {fileURLToPath} from "node:url";
 import {Worker} from "node:worker_threads";
 import {homedir} from "node:os";
 
-export const 버전 = "2026-10-23c";
+export const 버전 = "2026-10-23d";
 
 const 여기 = dirname(fileURLToPath(import.meta.url));            // <임시>/앱
 const 프로그램폴더 = join(여기, "..", "99_절대_건들지마세요_프로그램파일");
