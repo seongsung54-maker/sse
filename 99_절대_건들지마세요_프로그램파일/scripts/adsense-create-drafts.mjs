@@ -373,10 +373,11 @@ function validateExcerpt(excerpt, focusKeyword, title = "") {
   if (/[<>{}]/.test(text)) throw new Error("워드프레스 발췌문에 허용되지 않는 문자가 있음");
 }
 
-function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}) {
+function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expectedImages = null} = {}) {
   if (/<h1\b/i.test(html)) throw new Error("본문에 h1 태그가 남아 있음");
   validateHumanVoice(stripTags(html), "본문");
   if (!/<!--\s*wp:/i.test(html)) throw new Error("본문에 Gutenberg 블록 주석이 없음");
+  validateGutenbergBlockStructure(html);
   const firstH2 = html.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
   if (!firstH2) throw new Error("본문 첫 소제목 h2를 찾지 못함");
   const firstH2Text = stripTags(firstH2[1]);
@@ -463,6 +464,94 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = ""} = {}
     .filter((text) => text.length >= 40);
   const duplicateParagraph = paragraphs.find((text, index) => paragraphs.indexOf(text) !== index);
   if (duplicateParagraph) throw new Error("본문에 같은 문단이 반복됨");
+  validateNearDuplicateParagraphs(html);
+  validateRepeatedHeadings(html);
+  validateQuestionAnswerPairs(html);
+  validateImageBlocks(html, {expectedCount: expectedImages});
+}
+
+function validateGutenbergBlockStructure(html) {
+  const allowed = new Set(["paragraph", "heading", "list", "table", "image"]);
+  const stack = [];
+  const comments = [...String(html).matchAll(/<!--\s*(\/?)wp:([a-z0-9-]+)(?:\s+[^-]*?)?\s*(\/?)-->/gi)];
+  for (const comment of comments) {
+    const closing = comment[1] === "/";
+    const name = comment[2].toLowerCase();
+    const selfClosing = comment[3] === "/";
+    if (!allowed.has(name)) throw new Error(`허용되지 않는 Gutenberg 블록이 있음 (${name})`);
+    if (selfClosing) throw new Error(`자체 닫힘 Gutenberg 블록은 사용할 수 없음 (${name})`);
+    if (closing) {
+      const open = stack.pop();
+      if (open !== name) throw new Error(`Gutenberg 블록의 시작·끝이 맞지 않음 (${open || "없음"} / ${name})`);
+    } else {
+      stack.push(name);
+    }
+  }
+  if (stack.length > 0) throw new Error(`닫히지 않은 Gutenberg 블록이 있음 (${stack.at(-1)})`);
+}
+
+function paragraphTexts(html) {
+  return [...String(html).matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((match) => comparableText(stripTags(match[1])))
+    .filter((text) => text.length >= 40);
+}
+
+function bigramSimilarity(left, right) {
+  const pairs = (text) => {
+    const set = new Set();
+    for (let i = 0; i < text.length - 1; i += 1) set.add(text.slice(i, i + 2));
+    return set;
+  };
+  const a = pairs(left);
+  const b = pairs(right);
+  let intersection = 0;
+  for (const pair of a) if (b.has(pair)) intersection += 1;
+  return intersection / Math.max(1, a.size + b.size - intersection);
+}
+
+function validateNearDuplicateParagraphs(html) {
+  const paragraphs = paragraphTexts(html);
+  for (let i = 0; i < paragraphs.length; i += 1) {
+    for (let j = i + 1; j < paragraphs.length; j += 1) {
+      const shorter = Math.min(paragraphs[i].length, paragraphs[j].length);
+      const longer = Math.max(paragraphs[i].length, paragraphs[j].length);
+      if (shorter / longer >= 0.85 && bigramSimilarity(paragraphs[i], paragraphs[j]) >= 0.94) {
+        throw new Error("본문에 거의 같은 문단이 반복됨");
+      }
+    }
+  }
+}
+
+function validateRepeatedHeadings(html) {
+  const headings = [...String(html).matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)]
+    .map((match) => comparableText(stripTags(match[1])))
+    .filter((text) => text.length >= 2);
+  if (headings.some((heading, index) => headings.indexOf(heading) !== index)) {
+    throw new Error("본문에 같은 소제목이 반복됨");
+  }
+}
+
+function validateQuestionAnswerPairs(html) {
+  const blocks = [...String(html).matchAll(/<(?:p|h[23])\b[^>]*>([\s\S]*?)<\/(?:p|h[23])>/gi)]
+    .map((match) => stripTags(match[1]).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  let unanswered = 0;
+  for (const text of blocks) {
+    if (/^Q\.\s*/i.test(text)) unanswered += 1;
+    if (/^A\.\s*/i.test(text)) {
+      if (unanswered < 1) throw new Error("질문 없이 A. 답변 문단이 있음");
+      unanswered -= 1;
+    }
+  }
+  if (unanswered > 0) throw new Error("A. 답변이 없는 Q. 질문 문단이 있음");
+}
+
+function validateImageBlocks(html, {expectedCount = null} = {}) {
+  const sources = [...String(html).matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)].map((match) => match[1]);
+  if (new Set(sources).size !== sources.length) throw new Error("같은 이미지가 본문에 반복됨");
+  if (expectedCount !== null && sources.length !== expectedCount) {
+    throw new Error(`본문 이미지 수가 조건과 다름 (${sources.length}개 / ${expectedCount}개)`);
+  }
 }
 
 function extractOutputText(data) {
@@ -2103,6 +2192,55 @@ async function updateDraftPostContent({siteUrl, username, appPassword, postId, h
   return data;
 }
 
+
+async function readSavedPost({siteUrl, username, appPassword, postId}) {
+  const credentials = wordpressCredentials(username, appPassword);
+  const response = await wpFetch(`${wordpressBaseUrl(siteUrl)}/wp-json/wp/v2/posts/${postId}?context=edit`, {
+    headers: {Authorization: `Basic ${credentials}`, Accept: "application/json"},
+  });
+  const body = await response.text();
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new Error(`워드프레스 저장 본문을 읽지 못함: ${body.slice(0, 200)}`);
+  }
+  if (!response.ok) throw new Error(`워드프레스 저장 본문 확인 실패: ${data.message || body.slice(0, 300)}`);
+  return data;
+}
+
+async function finalizePostStatus({siteUrl, username, appPassword, postId, status, date}) {
+  const credentials = wordpressCredentials(username, appPassword);
+  const payload = {status};
+  if (date) payload.date = date;
+  const response = await wpFetch(`${wordpressBaseUrl(siteUrl)}/wp-json/wp/v2/posts/${postId}?context=edit`, {
+    method: "POST",
+    headers: {Authorization: `Basic ${credentials}`, "Content-Type": "application/json", Accept: "application/json"},
+    body: JSON.stringify(payload),
+  });
+  const body = await response.text();
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new Error(`워드프레스 공개 상태 응답을 읽지 못함: ${body.slice(0, 200)}`);
+  }
+  if (!response.ok) throw new Error(`워드프레스 공개 상태 변경 실패: ${data.message || body.slice(0, 300)}`);
+  return data;
+}
+
+function validateSavedPost(post, title, {minChars, focusKeyword, summary, meta} = {}) {
+  const savedHtml = String(post?.content?.raw || post?.content?.rendered || "");
+  if (!savedHtml) throw new Error("워드프레스에 저장된 본문이 비어 있음");
+  if (stripTags(post?.title?.raw || post?.title?.rendered || "") !== title) {
+    throw new Error("워드프레스에 저장된 제목이 요청 제목과 다름");
+  }
+  validateArticleHtml(savedHtml, title, {minChars, focusKeyword, expectedImages: 1});
+  validateApprovalSummaryMatch(savedHtml, summary, focusKeyword);
+  validateExcerpt(meta?.excerpt || "", focusKeyword, title);
+  validateExcerptSituationMatch(summary, meta);
+}
+
 // 라이센스 게이트(수강 코드 확인) 통과 후, process.env 우선 + .env.local 보조로 설정을 읽는다 (PRD D8·D9)
 const env = requireLicense({scriptLabel: "애드센스 승인글 만들기"});
 const site = Number(argValue("site", "1"));
@@ -2321,7 +2459,7 @@ for (let index = 0; index < titles.length; index += 1) {
           articleUsage = mergeUsage(articleUsage, 더.usage);
         }
 
-        validateArticleHtml(html, title, {minChars, focusKeyword: meta.focusKeyword});
+        validateArticleHtml(html, title, {minChars, focusKeyword: meta.focusKeyword, expectedImages: 0});
         validateApprovalSummaryMatch(html, articleSummary, meta.focusKeyword);
         validateExcerpt(meta.excerpt, meta.focusKeyword, title);
         validateExcerptSituationMatch(articleSummary, meta);
@@ -2352,7 +2490,7 @@ for (let index = 0; index < titles.length; index += 1) {
     const featuredMedia = await uploadFeaturedImage({siteUrl, username, appPassword, title, meta, generatedImage});
     html = repairDraftCandidate(html, title, meta.focusKeyword);
     const htmlWithImage = insertImageBlockIntoArticle(html, buildArticleImageBlock({media: featuredMedia}));
-    validateArticleHtml(htmlWithImage, title, {minChars, focusKeyword: meta.focusKeyword});
+    validateArticleHtml(htmlWithImage, title, {minChars, focusKeyword: meta.focusKeyword, expectedImages: 1});
     validateApprovalSummaryMatch(htmlWithImage, articleSummary, meta.focusKeyword);
     validateExcerpt(meta.excerpt, meta.focusKeyword, title);
     validateExcerptSituationMatch(articleSummary, meta);
@@ -2364,23 +2502,32 @@ for (let index = 0; index < titles.length; index += 1) {
 
     const postDate = postDateForIndex(index + dateOffset, dateMode, startDate, {randomDays, fixedTime, stepDays, hourGap, perDay, minGapHours, 피할시각들: 잡힌시각들, slotStartTime, slotGapMinutes});
     const postStatus = publish ? "publish" : "draft";
-    // 두 저장 모드 모두 사이트별 발행 날짜와 시간을 보존한다.
-    // 공개 발행은 미래 시각이면 WordPress가 future(예약 공개)로, 현재·과거 시각이면 publish로 응답한다.
+    // 먼저 임시글로 저장해 실제 워드프레스 저장본을 검사한다.
+    // 공개 요청은 이 검사를 통과한 뒤에만 최종 상태를 바꾼다.
     const savedDate = postDate;
-    if (savedDate) 잡힌시각들.push(Date.parse(savedDate)); // 이번 실행에서 잡은 시각도 다음 글이 피하게
-    const allowedPostStatuses = publish ? new Set(["publish", "future"]) : new Set(["draft"]);
-    let post = await createDraftPost({siteUrl, username, appPassword, title, html: htmlWithImage, date: savedDate, meta, featuredMediaId: featuredMedia.id, selectedCategory, postStatus});
-    if (!allowedPostStatuses.has(post.status)) {
-      throw new Error(`워드프레스 글 상태 확인 실패: 요청 ${postStatus}, 응답 ${post.status || "없음"}`);
+    if (savedDate) 잡힌시각들.push(Date.parse(savedDate));
+    let post = await createDraftPost({siteUrl, username, appPassword, title, html: htmlWithImage, date: savedDate, meta, featuredMediaId: featuredMedia.id, selectedCategory, postStatus: "draft"});
+    if (post.status !== "draft") {
+      throw new Error(`워드프레스 임시글 상태 확인 실패: 응답 ${post.status || "없음"}`);
     }
     if (!postHasInlineImage(post, featuredMedia)) {
       post = await updateDraftPostContent({siteUrl, username, appPassword, postId: post.id, html: htmlWithImage, featuredMediaId: featuredMedia.id, selectedCategory});
     }
+    post = await readSavedPost({siteUrl, username, appPassword, postId: post.id});
+    validateSavedPost(post, title, {minChars, focusKeyword: meta.focusKeyword, summary: articleSummary, meta});
     if (!postHasInlineImage(post, featuredMedia)) {
       throw new Error("워드프레스 글 본문에 이미지 블록이 저장되지 않았습니다.");
     }
-    if (!allowedPostStatuses.has(post.status)) {
-      throw new Error(`워드프레스 글 상태 확인 실패: 요청 ${postStatus}, 응답 ${post.status || "없음"}`);
+
+    if (publish) {
+      post = await finalizePostStatus({siteUrl, username, appPassword, postId: post.id, status: "publish", date: savedDate});
+      post = await readSavedPost({siteUrl, username, appPassword, postId: post.id});
+      if (!new Set(["publish", "future"]).has(post.status)) {
+        throw new Error(`워드프레스 공개 상태 확인 실패: 응답 ${post.status || "없음"}`);
+      }
+      validateSavedPost(post, title, {minChars, focusKeyword: meta.focusKeyword, summary: articleSummary, meta});
+    } else if (post.status !== "draft") {
+      throw new Error(`워드프레스 임시글 상태 확인 실패: 응답 ${post.status || "없음"}`);
     }
 
     // 랭크매스 포커스 키워드. 없는 사이트면 조용히 건너뛰되, 화면에는 왜 안 됐는지 남긴다.
