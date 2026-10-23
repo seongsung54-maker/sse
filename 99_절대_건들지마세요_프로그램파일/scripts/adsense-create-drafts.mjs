@@ -1927,7 +1927,12 @@ function convertOrderedListsToParagraphs(html) {
 }
 
 function repairDraftCandidate(html, title, focusKeyword = "") {
-  let repaired = convertOrderedListsToParagraphs(html);
+  let repaired = convertOrderedListsToParagraphs(html)
+    // 일부 생성기가 태그 이름을 Gutenberg 블록 이름으로 잘못 쓰는 경우를 표준 이름으로 고친다.
+    .replace(/<!--\s*wp:h2(?:\s+\{[^}]*\})?\s*-->/gi, "<!-- wp:heading -->")
+    .replace(/<!--\s*\/wp:h2\s*-->/gi, "<!-- /wp:heading -->")
+    .replace(/<!--\s*wp:h3(?:\s+\{[^}]*\})?\s*-->/gi, "<!-- wp:heading {\"level\":3} -->")
+    .replace(/<!--\s*\/wp:h3\s*-->/gi, "<!-- /wp:heading -->");
   if (focusKeyword) {
     const escapedKeyword = focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const boldKeyword = new RegExp("<(?:strong|b)\\b[^>]*>\\s*(" + escapedKeyword + ")\\s*</(?:strong|b)>", "gi");
