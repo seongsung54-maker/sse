@@ -378,6 +378,7 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expe
   validateHumanVoice(stripTags(html), "본문");
   if (!/<!--\s*wp:/i.test(html)) throw new Error("본문에 Gutenberg 블록 주석이 없음");
   validateGutenbergBlockStructure(html);
+  if (/<ol\\b/i.test(html) || /<!--\\s*\\/?wp:ol\\b/i.test(html)) throw new Error("본문에 번호 목록이 남아 있음");
   const firstH2 = html.match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i);
   if (!firstH2) throw new Error("본문 첫 소제목 h2를 찾지 못함");
   const firstH2Text = stripTags(firstH2[1]);
@@ -1903,8 +1904,26 @@ function repairApprovalSummary({title, keyword, site, recentSummaries = []}) {
 function summaryParagraphBlock(summary) {
   return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
 }
+function convertOrderedListsToParagraphs(html) {
+  const paragraphBlocks = (listBody) => {
+    const items = [...String(listBody).matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
+      .map((match) => stripTags(match[1]).replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    return items.map((item) => `<!-- wp:paragraph -->\n<p>${escapeHtml(item)}</p>\n<!-- /wp:paragraph -->`).join("\n\n");
+  };
+
+  let converted = String(html || "");
+  // 번호 목록은 승인글 본문에 쓰지 않는다. 생성 결과에 섞이면 문단으로 풀어 쓴다.
+  converted = converted.replace(
+    /<!--\s*wp:(?:list|ol)(?:\s+\{[\s\S]*?\})?\s*-->\s*<ol\b[^>]*>([\s\S]*?)<\/ol>\s*<!--\s*\/wp:(?:list|ol)\s*-->/gi,
+    (_block, listBody) => paragraphBlocks(listBody),
+  );
+  converted = converted.replace(/<!--\s*\/?wp:ol(?:\s+\{[\s\S]*?\})?\s*-->/gi, "");
+  return converted.replace(/<ol\b[^>]*>([\s\S]*?)<\/ol>/gi, (_list, listBody) => paragraphBlocks(listBody));
+}
+
 function repairDraftCandidate(html, title, focusKeyword = "") {
-  let repaired = String(html || "");
+  let repaired = convertOrderedListsToParagraphs(html);
   if (focusKeyword) {
     const escapedKeyword = focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const boldKeyword = new RegExp("<(?:strong|b)\\b[^>]*>\\s*(" + escapedKeyword + ")\\s*</(?:strong|b)>", "gi");
@@ -1946,7 +1965,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     "반드시 Gutenberg 블록 주석을 사용한다. 예: <!-- wp:heading -->, <!-- wp:paragraph -->, <!-- wp:list -->, <!-- wp:table -->.",
     "h1은 절대 쓰지 않는다. 글 제목 바로 아래의 첫 본문 블록은 요약글 p이고, 그 다음 블록부터 h2를 쓴다.",
     "첫 h2 소제목은 글 제목과 같으면 안 된다. 제목을 복사하지 말고, 핵심 정리형 소제목으로 다르게 쓴다.",
-    "h2, h3, p, ul, ol, li, figure/table 태그를 자연스럽게 사용한다. strong 또는 b 태그는 쓰지 않는다.",
+    "h2, h3, p, ul, li, figure/table 태그를 자연스럽게 사용한다. 번호 목록(ol, wp:ol)은 절대 쓰지 않는다. strong 또는 b 태그는 쓰지 않는다.",
     "코드블록, 마크다운, 설명문, JSON-LD, script, iframe은 출력하지 않는다.",
     "광고 클릭 유도 문구, 구매 강요 문구, 애드센스 정책 위반 가능 문구는 넣지 않는다.",
     `사이트별 화자 말투: ${siteVoiceGuide(site)}`,
@@ -1962,7 +1981,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     "- 글 제목 바로 아래 첫 블록은 p 요약글로 작성한다. 공백 포함 140~160자의 한국어 한 문단이며, 제목 문장을 풀어 쓰는 대신 제목과 맞는 생활 장면에서 시작해 궁금증·원리·이 글에서 확인할 내용을 이어 쓴다.",
     키워드 ? `- 요약글에 포커스 키워드 "${키워드}"를 정확히 1회 이상 포함한다.` : "- 요약글에 제목의 핵심 키워드를 1회 이상 포함한다.",
     "- 요약글에는 왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나 이상의 친근한 표현을 자연스럽게 포함한다.",
-    "- 중간에 체크리스트 또는 단계별 절차 포함",
+    "- 중간에는 번호 목록을 쓰지 않는다. 단계별 설명이 필요하면 각 단계를 독립된 문단으로 풀어 쓴다.",
     "- 본문을 정리하는 마지막 소제목에는 마무리라는 말을 쓰지 않는다. 독자가 기억할 핵심 포인트를 한 줄로 나타낸 소제목을 쓴다.",
     "- 제목은 출력하지 않고, 요약글부터 본문으로 출력",
     "- 첫 h2는 제목과 다른 문구로 작성",
