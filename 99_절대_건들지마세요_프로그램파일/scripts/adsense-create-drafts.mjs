@@ -2005,8 +2005,39 @@ function topicForSummary(title) {
   return titleCoreTopic(title).replace(/[.!?]/g, "").slice(0, 34).trim();
 }
 
+function forceCompliantApprovalSummary({title, keyword, site, recentSummaries = []}) {
+  const topic = (titleContentKeywords(title, keyword).slice(0, 3).join(" ") || topicForSummary(title)).slice(0, 26);
+  const openings = [
+    `밤하늘을 올려다보다 ${topic}라는 이름을 보면 어떤 모습인지 궁금해져요.`,
+    `별자리 지도를 펼쳤을 때 ${topic}를 발견하면 어느 하늘에서 볼 수 있을지 궁금해져요.`,
+    `저녁 하늘을 바라보다 ${topic}가 눈에 들어오면 왜 그렇게 보이는지 알고 싶어져요.`,
+  ];
+  const tails = [
+    ` ${keyword}에서는 이 대상이 어느 계절과 방향에서 보이는지, 왜 이런 특징을 보이는지 살펴보고 처음 관측할 때 확인할 기준과 찾는 순서를 정리해 볼게요. 계절과 시간을 함께 보면 한결 찾기 쉬워집니다.`,
+    ` ${keyword}를 따라가며 이 대상의 위치와 특징을 확인하고, 왜 계절과 관측 시간에 따라 모습이 달라 보이는지 알아볼게요. 처음 별을 찾을 때 필요한 기준도 함께 짚어봅니다.`,
+    ` ${keyword} 속에서 이 대상이 보이는 시기와 방향을 살피고, 왜 관측 조건에 따라 다르게 느껴지는지 알아볼게요. 별자리 지도를 볼 때 확인할 순서도 함께 정리합니다.`,
+  ];
+  for (const opening of openings) for (const tail of tails) {
+    let summary = opening + tail;
+    if ([...summary].length > 160) summary = opening + tail.replace(" 처음 별을 찾을 때 필요한 기준도 함께 짚어봅니다.", "").replace(" 별자리 지도를 볼 때 확인할 순서도 함께 정리합니다.", "");
+    if ([...summary].length < 140) summary += " 천천히 위치를 비교하면 더 잘 보입니다.";
+    if ([...summary].length >= 140 && [...summary].length <= 160) {
+      try {
+        validateApprovalSummaryStyle(summary, {recentSummaries, title});
+        validateTitleKeywordConnection(summary, title, keyword, "요약글");
+        return summary;
+      } catch {}
+    }
+  }
+  throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
+}
+
 function repairApprovalSummary({title, keyword, site, recentSummaries = []}) {
-  return buildCompliantApprovalSummary({title, keyword, site, recentSummaries});
+  try {
+    return buildCompliantApprovalSummary({title, keyword, site, recentSummaries});
+  } catch {
+    return forceCompliantApprovalSummary({title, keyword, site, recentSummaries});
+  }
 }
 
 function summaryParagraphBlock(summary) {
