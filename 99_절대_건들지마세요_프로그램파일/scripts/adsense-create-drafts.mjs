@@ -1945,6 +1945,9 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
     if (text.length >= 40) seenParagraphs.add(text);
     return block;
   });
+  // Q./A. 표기는 본문에 남기지 않는다. 짝이 맞지 않아도 내용은 보존하고 일반 문단으로 고친다.
+  repaired = repaired.replace(/(<(?:p|h[23])\b[^>]*>)\s*(?:Q|A)\.\s*/gi, "$1");
+
   const seenHeadingTexts = new Set();
   repaired = repaired.replace(
     /<!--\s*wp:heading(?:\s+\{[^}]*\})?\s*-->\s*<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>\s*<!--\s*\/wp:heading\s*-->/gi,
