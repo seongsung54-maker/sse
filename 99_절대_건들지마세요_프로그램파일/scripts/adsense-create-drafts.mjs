@@ -2539,15 +2539,31 @@ for (let index = 0; index < titles.length; index += 1) {
           articleUsage = mergeUsage(articleUsage, 더.usage);
         }
 
-        validateArticleHtml(html, title, {minChars, focusKeyword: meta.focusKeyword, expectedImages: 0});
-        validateApprovalSummaryMatch(html, articleSummary, meta.focusKeyword);
-        validateExcerpt(meta.excerpt, meta.focusKeyword, title);
-        validateExcerptSituationMatch(articleSummary, meta);
+        const 검사오류 = collectFullDraftErrors(html, title, {
+          minChars,
+          focusKeyword: meta.focusKeyword,
+          expectedImages: 0,
+          summary: articleSummary,
+          meta,
+        });
+        if (검사오류.length > 0) throw new Error(검사오류.join(" | "));
         통과 = true;
         break;
       } catch (repairError) {
         마지막오류 = repairError instanceof Error ? repairError.message : String(repairError);
-        if (수정시도 < 3) console.log(`  규칙 오류를 고쳐 다시 점검하는 중 (${수정시도}/3)`);
+        if (수정시도 < 3) {
+          console.log(`  전체 규칙을 고쳐 다시 점검하는 중 (${수정시도}/3)`);
+          const 수정본 = await reviseSameDraft({
+            apiKey: env.OPENAI_API_KEY,
+            model,
+            title,
+            html,
+            errors: 마지막오류.split(" | ").filter(Boolean),
+            focusKeyword: meta.focusKeyword,
+          });
+          html = 수정본.html;
+          articleUsage = mergeUsage(articleUsage, 수정본.usage);
+        }
       }
     }
 
