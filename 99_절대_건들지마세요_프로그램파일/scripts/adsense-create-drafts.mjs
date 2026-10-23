@@ -1945,6 +1945,16 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
     if (text.length >= 40) seenParagraphs.add(text);
     return block;
   });
+  const seenHeadingTexts = new Set();
+  repaired = repaired.replace(
+    /<!--\s*wp:heading(?:\s+\{[^}]*\})?\s*-->\s*<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>\s*<!--\s*\/wp:heading\s*-->/gi,
+    (block, inner) => {
+      const key = comparableText(stripTags(inner));
+      if (key && seenHeadingTexts.has(key)) return "";
+      if (key) seenHeadingTexts.add(key);
+      return block;
+    },
+  );
   const headings = [...repaired.matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)];
   const finalHeading = headings.at(-1);
   if (finalHeading) {
