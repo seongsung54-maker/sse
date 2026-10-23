@@ -1987,7 +1987,17 @@ function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummarie
   for (const topic of topics) for (const ending of endings) {
     let summary = situation + " " + keyword + "을 따라가면 " + topic + "이 " + ending + " " + (guides[Number(site)] || "이 글에서 핵심 내용을 살펴볼게요.");
     for (const addition of additions) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
-    if ([...summary].length >= 140 && [...summary].length <= 160) { validateApprovalSummaryStyle(summary, {recentSummaries, title}); validateTitleKeywordConnection(summary, title, keyword, "요약글"); return summary; }
+    if ([...summary].length >= 140 && [...summary].length <= 160) {
+      // 첫 후보가 기존 요약글과 겹쳐도 여기서 중단하지 않는다.
+      // 제목·장면·끝맺음을 바꾼 다음 후보를 모두 비교해 통과하는 문장만 고른다.
+      try {
+        validateApprovalSummaryStyle(summary, {recentSummaries, title});
+        validateTitleKeywordConnection(summary, title, keyword, "요약글");
+        return summary;
+      } catch {
+        continue;
+      }
+    }
   }
   throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
 }
