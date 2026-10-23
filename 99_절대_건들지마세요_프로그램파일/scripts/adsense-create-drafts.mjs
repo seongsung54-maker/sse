@@ -264,6 +264,12 @@ function normalizeTableBlocks(html) {
   return out.replace(/\n{3,}/g, "\n\n");
 }
 
+function canonicalizeArticleBlocks(html) {
+  // AI가 블록 주석의 여닫는 짝을 틀리게 보내도 원문 태그를 기준으로 표준 Gutenberg 블록을 다시 만든다.
+  const withoutBlockComments = String(html || "").replace(/<!--\s*\/?wp:[\s\S]*?-->/gi, "").trim();
+  return wrapPlainHtmlAsBlocks(withoutBlockComments);
+}
+
 function normalizeArticleHtml(rawHtml, title) {
   let html = cleanHtml(rawHtml)
     .replace(/<h1\b([^>]*)>([\s\S]*?)<\/h1>/gi, (_match, attrs, inner) => `<h2${attrs}>${inner}</h2>`)
@@ -272,9 +278,7 @@ function normalizeArticleHtml(rawHtml, title) {
   // 블록으로 감싸기 전에 마크다운 표를 먼저 HTML 로 바꿔 둔다
   html = markdownTablesToHtml(html);
 
-  if (!/<!--\s*wp:/i.test(html)) {
-    html = wrapPlainHtmlAsBlocks(html);
-  }
+  html = canonicalizeArticleBlocks(html);
 
   html = html.replace(/<h1\b([^>]*)>([\s\S]*?)<\/h1>/gi, (_match, _attrs, inner) => {
     const text = stripTags(inner);
