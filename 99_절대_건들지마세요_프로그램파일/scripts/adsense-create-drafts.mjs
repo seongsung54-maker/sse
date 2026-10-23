@@ -677,6 +677,48 @@ function readJsonArray(filePath) {
   }
 }
 
+
+// 세 번의 전체 수정·검사를 끝내도 통과하지 못한 원고는 버리지 않는다.
+// 다음 규칙 보완이나 수동 재점검 때 같은 원고를 다시 쓸 수 있도록 제목·본문·요약·발췌문과
+// 마지막 오류만 별도 대기 목록에 남긴다. 성공 기록과 분리해 새 제목으로 오인하지 않게 한다.
+function retryQueueFile(outputDir) {
+  return join(outputDir, "validation-retry-queue.json");
+}
+
+function readRetryQueue(outputDir) {
+  return readJsonArray(retryQueueFile(outputDir))
+    .filter((entry) => entry && normalizeSpaces(entry.title))
+    .map((entry) => ({
+      ...entry,
+      title: normalizeSpaces(entry.title),
+      status: entry.status || "held",
+      validationCycles: Number(entry.validationCycles || 0),
+    }));
+}
+
+function upsertRetryQueueEntry(outputDir, entry) {
+  const filePath = retryQueueFile(outputDir);
+  const key = titleKey(entry.title);
+  const queue = readRetryQueue(outputDir).filter((item) => titleKey(item.title) !== key);
+  queue.push({
+    id: entry.id || createHash("sha256").update(`${entry.site}|${entry.title}`).digest("hex").slice(0, 16),
+    site: Number(entry.site || 0),
+    title: normalizeSpaces(entry.title),
+    titleEntry: entry.titleEntry || {title: normalizeSpaces(entry.title)},
+    html: String(entry.html || ""),
+    summary: normalizeSpaces(entry.summary || ""),
+    meta: entry.meta || {},
+    focusKeyword: normalizeSpaces(entry.focusKeyword || ""),
+    errors: Array.isArray(entry.errors) ? entry.errors.filter(Boolean) : [String(entry.errors || "")].filter(Boolean),
+    validationCycles: Number(entry.validationCycles || 0),
+    status: entry.status || "held",
+    createdAt: entry.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  mkdirSync(dirname(filePath), {recursive: true});
+  writeFileSync(filePath, JSON.stringify(queue, null, 2), "utf8");
+}
+
 function compactDraftHistoryEntry(item) {
   if (!item?.ok || !normalizeSpaces(item.title)) return null;
   return {
@@ -2578,14 +2620,37 @@ for (let index = 0; index < titles.length; index += 1) {
             errors: 마지막오류.split(" | ").filter(Boolean),
             focusKeyword: meta.focusKeyword,
           });
-          html = 수정본.html;
+          // 수정 모델이 첫 문단을 바꾸면 채팅창 요약글과 본문 요약글이 달라질 수 있다.
+          // 확정된 요약글을 항상 다시 첫 블록에 넣어 둘을 완전히 같게 유지한다.
+          html = applyApprovalSummary(repairDraftCandidate(수정본.html, title, meta.focusKeyword), articleSummary);
           articleUsage = mergeUsage(articleUsage, 수정본.usage);
         }
       }
     }
 
     if (!통과) {
-      throw new Error(`같은 원고를 세 번 수정·점검했지만 통과하지 못해 임시글로 저장하지 않았어요: ${마지막오류}`);
+      // 한 번의 세트는 전체 검사 → 발견한 모든 오류 수정 → 전체 재검사다.
+      // 세 세트를 모두 써도 실패하면 새 원고를 만들거나 같은 제목을 다시 뽑지 않는다.
+      // 원고를 보관 목록에 남기고 이번 요청의 다음 제목으로 계속 진행한다.
+      upsertRetryQueueEntry(outputDir, {
+        site,
+        title,
+        titleEntry,
+        html,
+        summary: articleSummary,
+        meta,
+        focusKeyword: meta.focusKeyword,
+        errors: 마지막오류.split(" | ").filter(Boolean),
+        validationCycles: 3,
+        status: "held",
+      });
+      results.push({
+        site, title, ok: false, skipped: true, reason: "validation-held",
+        summary: articleSummary, errors: 마지막오류.split(" | ").filter(Boolean),
+      });
+      console.log(`  보관: 같은 원고를 세 번 수정·점검했지만 통과하지 못해 저장하지 않음 — 다음 제목으로 진행합니다.`);
+      진행.글건너뜀();
+      continue;
     }
     const usage = mergeUsage(metaUsage, articleUsage);
     let selectedCategory = null;
