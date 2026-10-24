@@ -521,14 +521,23 @@ function collectFullDraftErrors(html, title, {minChars = 0, focusKeyword = "", e
       if (!errors.includes(message)) errors.push(message);
     }
   };
-  // 한 번의 전체 검사에서 본문·요약글·발췌문 관련 조건을 모두 확인한다.
+  // 한 번의 전체 검사에서 본문·요약글·발췌문·슬러그 관련 조건을 모두 확인한다.
   check(() => validateArticleHtml(html, title, {minChars, focusKeyword, expectedImages}));
-  if (summary) check(() => validateApprovalSummaryMatch(html, summary, focusKeyword));
-  if (meta?.excerpt) {
+  if (!normalizeSpaces(summary)) {
+    errors.push("요약글을 만들지 못함");
+  } else {
+    check(() => validateApprovalSummaryMatch(html, summary, focusKeyword));
+  }
+  if (!normalizeSpaces(meta?.excerpt || "")) {
+    errors.push("워드프레스 발췌문을 만들지 못함");
+  } else {
     check(() => validateExcerpt(meta.excerpt, focusKeyword, title));
     if (summary) check(() => validateExcerptSituationMatch(summary, meta));
   }
-  return errors;
+  if (!normalizeSpaces(meta?.slug || "")) {
+    errors.push("제목 내용에 맞는 영문 슬러그를 만들지 못함");
+  }
+  return [...new Set(errors)];
 }
 
 async function reviseSameDraft({apiKey, model, title, html, errors, focusKeyword = ""}) {
@@ -2225,27 +2234,22 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
   if (!html) throw new Error("OpenAI가 빈 본문을 반환함");
   html = repairDraftCandidate(html, title, 키워드);
   if (키워드) {
-    let summary;
+    // 요약글 오류가 나도 본문 원고는 버리지 않는다.
+    // 아래의 전체 수정·재검증 순환이 같은 원고에서 요약글·발췌문까지 함께 고친다.
+    let summary = "";
+    let summaryError = "";
     try {
       const generatedSummary = await generateApprovalSummary({apiKey, model, title, keyword: 키워드, site, recentSummaries});
       summary = generatedSummary.summary;
-    } catch {
-      summary = buildCompliantApprovalSummary({title, keyword: 키워드, site, recentSummaries});
-    }
-    try {
       validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
-      // 전체 본문 검사는 아래의 수정·재검증 순환에서 한꺼번에 한다.
-    } catch {
-      summary = repairApprovalSummary({title, keyword: 키워드, site, recentSummaries});
-      validateApprovalSummaryStyle(summary, {recentSummaries, title});
-      validateTitleKeywordConnection(summary, title, 키워드, "요약글");
-      html = applyApprovalSummary(html, summary);
-      // 전체 본문 검사는 아래의 수정·재검증 순환에서 한꺼번에 한다.
+    } catch (error) {
+      summaryError = error instanceof Error ? error.message : String(error);
+      summary = "";
     }
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
-    return {html, summary, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
+    return {html, summary, summaryError, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
   }
   validateArticleHtml(html, title, {minChars: 0});
   const 글자수 = stripTags(html).replace(/\s/g, "").length;
@@ -2526,12 +2530,20 @@ if (!includeUsedTitles) {
   }
 }
 
+const heldRetryTitleKeys = new Set(
+  readRetryQueue(outputDir)
+    .filter((entry) => entry.status === "held")
+    .map((entry) => titleKey(entry.title)),
+);
 const usedTitleKeys = new Set([
   ...previousDraftHistory.map((entry) => titleKey(entry.title)),
   ...existingOnWordPress.titles.map((title) => titleKey(title)),
+  ...heldRetryTitleKeys,
 ]);
+// 후보는 전부 무작위로 섞어 두고, 요청한 개수만큼 통과·저장될 때까지 다음 제목을 이어 처리한다.
+const requestedCount = limit > 0 ? limit : allTitleEntries.length;
 const selection = selectRandomUnusedTitleEntries(
-  allTitleEntries, includeUsedTitles ? new Set() : usedTitleKeys, limit,
+  allTitleEntries, includeUsedTitles ? new Set() : usedTitleKeys, 0,
 );
 const titleEntries = selection.entries;
 const titles = titleEntries.map((entry) => entry.title);
@@ -2562,7 +2574,7 @@ console.log(`애드센스 사이트 ${site}번 임시글 생성 시작`);
 console.log(`제목 파일: ${titlesPath}`);
 console.log(`제목 ${titles.length}개 무작위 선택 / 전체 ${allTitleEntries.length}개 / 이전 성공 ${previousDraftHistory.length}개 자동 제외 / 모델 ${model} / 본문 ${minChars}자 이상 목표`);
 if (limit > 0) {
-  console.log(`제목 ${allTitleEntries.length}개 중 아직 안 쓴 제목 ${selection.availableCount}개 / 이번에 ${titles.length}개를 만듭니다.`);
+  console.log(`제목 ${allTitleEntries.length}개 중 아직 안 쓴 제목 ${selection.availableCount}개 / 이번에 ${requestedCount}개 저장을 목표로 합니다.`);
 }
 if (titleCatalog.categories.length > 0) {
   console.log(`제목 파일 카테고리 매핑: 대표 ${titleCatalog.categories.length}개 / 세부 ${titleCatalog.categories.reduce((sum, category) => sum + category.children.length, 0)}개`);
@@ -2602,7 +2614,7 @@ if (예산.있음) {
 }
 console.log("진행 게이지는 화면과 '애드센스 승인글/02_생성결과_확인용/지금_진행상황.md' 파일에 같이 표시됩니다.");
 console.log("");
-진행 = new 진행표시({전체: titles.length, 라벨: `사이트${site} · 글 ${titles.length}개 만드는 중`});
+진행 = new 진행표시({전체: requestedCount, 라벨: `사이트${site} · 글 ${requestedCount}개 만드는 중`});
 const 이번실행 = {글수: 0, krw: 0, usd: 0, total_tokens: 0};
 
 const 잡힌시각들 = Array.isArray(existingOnWordPress.dates) ? [...existingOnWordPress.dates] : [];
@@ -2611,6 +2623,7 @@ const 대주제 = argValue("focus-keyword", "") || 대주제키워드(allTitleEn
 if (대주제) console.log(`포커스 키워드(대주제): ${대주제}`);
 const results = [];
 for (let index = 0; index < titles.length; index += 1) {
+  if (이번실행.글수 >= requestedCount) break;
   const titleEntry = titleEntries[index];
   const title = titleEntry.title;
   try {
@@ -2637,66 +2650,142 @@ for (let index = 0; index < titles.length; index += 1) {
     let html = made.html;
     let articleUsage = made.usage;
     let articleSummary = made.summary || "";
-
-    // 요약글을 먼저 확정한 뒤, 그 장면을 그대로 전달해 발췌문을 만든다.
-    for (let 시도 = 1; 시도 <= 3; 시도 += 1) {
-      try {
-        const generatedMeta = await generatePostMeta({apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드, site, summary: articleSummary});
-        meta = {...generatedMeta.meta, focusKeyword: 이글키워드, excerpt: repairExcerptVoice(generatedMeta.meta.excerpt, title)};
-        validateExcerpt(meta.excerpt, meta.focusKeyword, title);
-        validateExcerptSituationMatch(articleSummary, meta);
-        metaUsage = generatedMeta.usage;
-        break;
-      } catch (metaError) {
-        if (시도 === 3) {
-          const fallback = buildExcerptFromSummaryScene(articleSummary, title, 이글키워드);
-          meta = {...fallbackPostMeta(title), focusKeyword: 이글키워드, excerpt: fallback.excerpt, sceneAnchor: fallback.sceneAnchor};
-          metaUsage = {inputTokens: 0, outputTokens: 0, totalTokens: 0};
-        }
-      }
-    }
-
+    let summaryPreparationError = made.summaryError || "";
+    let metaReady = false;
     let 통과 = false;
     let 마지막오류 = "";
 
+    // 한 사이클은 전체 검사 → 발견한 모든 항목 수정 → 전체 재검사다.
+    // 같은 제목의 본문을 새로 만들지 않고, 최대 세 번까지 그 원고만 고친다.
     for (let 수정시도 = 1; 수정시도 <= 3; 수정시도 += 1) {
+      const cycleErrors = [];
       try {
-        // API 호출 없이 해결 가능한 서식·반복·소제목 오류를 먼저 고친다.
         html = repairDraftCandidate(html, title, meta.focusKeyword);
+
+        // 요약글이 아직 없거나 직전 요약글 검사에서 실패했으면, 같은 본문에 새 요약글만 붙인다.
+        if (!articleSummary) {
+          try {
+            const generatedSummary = await generateApprovalSummary({
+              apiKey: env.OPENAI_API_KEY, model, title, keyword: 이글키워드, site, recentSummaries,
+            });
+            articleSummary = generatedSummary.summary;
+            summaryPreparationError = "";
+          } catch (generatedError) {
+            try {
+              articleSummary = repairApprovalSummary({title, keyword: 이글키워드, site, recentSummaries});
+              summaryPreparationError = "";
+            } catch (summaryError) {
+              summaryPreparationError = summaryError instanceof Error ? summaryError.message : String(summaryError);
+              cycleErrors.push(summaryPreparationError);
+            }
+          }
+        }
+
+        if (articleSummary) {
+          try {
+            validateApprovalSummaryStyle(articleSummary, {recentSummaries, title});
+            validateTitleKeywordConnection(articleSummary, title, 이글키워드, "요약글");
+            html = applyApprovalSummary(html, articleSummary);
+          } catch (summaryError) {
+            cycleErrors.push(summaryError instanceof Error ? summaryError.message : String(summaryError));
+            articleSummary = "";
+          }
+        } else if (summaryPreparationError) {
+          cycleErrors.push(summaryPreparationError);
+        }
+
+        // 발췌문은 확정된 요약글의 장면을 받아 같은 글 소개처럼 만든다.
+        // 본문만 고친 다음 사이클에서는 이미 통과한 발췌문을 다시 생성하지 않는다.
+        if (articleSummary && !metaReady) {
+          try {
+            const generatedMeta = await generatePostMeta({
+              apiKey: env.OPENAI_API_KEY, model, title, 고정키워드: 이글키워드, site, summary: articleSummary,
+            });
+            meta = {
+              ...generatedMeta.meta,
+              focusKeyword: 이글키워드,
+              excerpt: repairExcerptVoice(generatedMeta.meta.excerpt, title),
+            };
+            metaUsage = mergeUsage(metaUsage, generatedMeta.usage);
+            validateExcerpt(meta.excerpt, meta.focusKeyword, title);
+            validateExcerptSituationMatch(articleSummary, meta);
+            if (!normalizeSpaces(meta.slug || "")) throw new Error("제목 내용에 맞는 영문 슬러그를 만들지 못함");
+            metaReady = true;
+          } catch (metaError) {
+            try {
+              const fallback = buildExcerptFromSummaryScene(articleSummary, title, 이글키워드);
+              meta = {
+                ...fallbackPostMeta(title),
+                focusKeyword: 이글키워드,
+                excerpt: fallback.excerpt,
+                sceneAnchor: fallback.sceneAnchor,
+              };
+              validateExcerpt(meta.excerpt, meta.focusKeyword, title);
+              validateExcerptSituationMatch(articleSummary, meta);
+              metaReady = true;
+            } catch (fallbackError) {
+              metaReady = false;
+              cycleErrors.push(fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
+            }
+          }
+        } else {
+          metaReady = false;
+          cycleErrors.push("요약글을 먼저 확정해야 워드프레스 발췌문을 만들 수 있음");
+        }
 
         const 현재글자수 = stripTags(html).replace(/\s/g, "").length;
         if (현재글자수 < minChars) {
-          const 더 = await extendArticle({apiKey: env.OPENAI_API_KEY, model, title, html, 부족자수: minChars - 현재글자수});
+          const 더 = await extendArticle({
+            apiKey: env.OPENAI_API_KEY, model, title, html, 부족자수: minChars - 현재글자수,
+          });
           html = repairDraftCandidate(`${html.trim()}\n\n${더.추가}`, title, meta.focusKeyword);
           articleUsage = mergeUsage(articleUsage, 더.usage);
         }
 
-        const 검사오류 = collectFullDraftErrors(html, title, {
-          minChars,
-          focusKeyword: meta.focusKeyword,
-          expectedImages: 0,
-          summary: articleSummary,
-          meta,
-        });
-        if (검사오류.length > 0) throw new Error(검사오류.join(" | "));
+        const 검사오류 = [
+          ...cycleErrors,
+          ...collectFullDraftErrors(html, title, {
+            minChars,
+            focusKeyword: meta.focusKeyword,
+            expectedImages: 0,
+            summary: articleSummary,
+            meta: metaReady ? meta : null,
+          }),
+        ];
+        if (검사오류.length > 0) throw new Error([...new Set(검사오류)].join(" | "));
         통과 = true;
         break;
       } catch (repairError) {
         마지막오류 = repairError instanceof Error ? repairError.message : String(repairError);
         if (수정시도 < 3) {
           console.log(`  전체 규칙을 고쳐 다시 점검하는 중 (${수정시도}/3)`);
-          const 수정본 = await reviseSameDraft({
-            apiKey: env.OPENAI_API_KEY,
-            model,
-            title,
-            html,
-            errors: 마지막오류.split(" | ").filter(Boolean),
-            focusKeyword: meta.focusKeyword,
-          });
-          // 수정 모델이 첫 문단을 바꾸면 채팅창 요약글과 본문 요약글이 달라질 수 있다.
-          // 확정된 요약글을 항상 다시 첫 블록에 넣어 둘을 완전히 같게 유지한다.
-          html = applyApprovalSummary(repairDraftCandidate(수정본.html, title, meta.focusKeyword), articleSummary);
-          articleUsage = mergeUsage(articleUsage, 수정본.usage);
+          const errors = 마지막오류.split(" | ").filter(Boolean);
+          const 본문오류 = errors.filter((error) => !/(요약글|발췌문|슬러그|장면)/.test(error));
+          // 요약글·발췌문 오류는 본문을 다시 쓰지 않는다. 같은 본문에 소개문만 다시 붙인다.
+          if (본문오류.length > 0) {
+            const 수정본 = await reviseSameDraft({
+              apiKey: env.OPENAI_API_KEY,
+              model,
+              title,
+              html,
+              errors: 본문오류,
+              focusKeyword: meta.focusKeyword,
+            });
+            html = repairDraftCandidate(수정본.html, title, meta.focusKeyword);
+            articleUsage = mergeUsage(articleUsage, 수정본.usage);
+          }
+          if (errors.some((error) => /(요약글|장면)/.test(error))) {
+            articleSummary = "";
+            summaryPreparationError = "";
+            meta = fallbackPostMeta(title, {allowMissingSlug: true});
+            meta.focusKeyword = 이글키워드;
+            metaReady = false;
+          }
+          if (errors.some((error) => /(발췌문|슬러그)/.test(error))) {
+            meta = fallbackPostMeta(title, {allowMissingSlug: true});
+            meta.focusKeyword = 이글키워드;
+            metaReady = false;
+          }
         }
       }
     }
