@@ -2728,7 +2728,7 @@ for (let index = 0; index < titles.length; index += 1) {
               cycleErrors.push(fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
             }
           }
-        } else {
+        } else if (!articleSummary) {
           metaReady = false;
           cycleErrors.push("요약글을 먼저 확정해야 워드프레스 발췌문을 만들 수 있음");
         }
