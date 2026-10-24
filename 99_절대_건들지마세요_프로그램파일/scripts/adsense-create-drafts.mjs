@@ -358,6 +358,92 @@ function titleContentKeywords(title, focusKeyword) {
     .filter((word) => word.length >= 2 && !excluded.has(word));
 }
 
+function summaryTemplateSignature(summary, title, focusKeyword) {
+  let signature = comparableText(summary);
+  const removable = [focusKeyword, ...titleContentKeywords(title, focusKeyword)]
+    .map((term) => comparableText(term))
+    .filter((term) => term.length >= 2)
+    .sort((a, b) => b.length - a.length);
+  for (const term of removable) signature = signature.split(term).join(" ");
+  return signature.replace(/\s+/g, " ").trim();
+}
+
+function validateSummarySpecificity(summary, {title, focusKeyword, recentSummaries = []} = {}) {
+  const text = normalizeSpaces(summary);
+  const genericPatterns = [
+    /(?:을|를) 따라가면/,
+    /제목 속 변화가 지금의 생활과 어떻게 이어지는지도/,
+    /이 대상이 어느 계절과 방향에서/,
+    /처음 관측할 때 확인할 기준/,
+    /계절과 시간을 함께 보면/,
+    /왜 필요했는지와 어떻게 달라졌는지 궁금해집니다/,
+  ];
+  if (genericPatterns.some((pattern) => pattern.test(text))) {
+    throw new Error("요약글에 제목과 무관하게 반복되는 조합 문장이 있음");
+  }
+  const titleTerms = titleContentKeywords(title, focusKeyword)
+    .filter((term) => comparableText(term).length >= 2);
+  const directMatches = titleTerms.filter((term) => text.includes(term));
+  const neededMatches = titleTerms.length >= 3 ? 2 : titleTerms.length;
+  if (neededMatches > 0 && directMatches.length < neededMatches) {
+    throw new Error("요약글에 제목의 구체적인 대상·상황 연결이 부족함");
+  }
+  const signature = summaryTemplateSignature(text, title, focusKeyword);
+  for (const previous of recentSummaries.slice(-20)) {
+    const previousSignature = summaryTemplateSignature(previous, title, focusKeyword);
+    if (signature.length >= 35 && previousSignature.length >= 35 && bigramSimilarity(signature, previousSignature) >= 0.78) {
+      throw new Error("요약글의 도입·끝맺음 구조가 이전 글과 지나치게 비슷함");
+    }
+  }
+}
+
+function parseModelJsonObject(text) {
+  const source = String(text || "").trim();
+  const match = source.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("요약글 의미 검토 응답 형식이 올바르지 않음");
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    throw new Error("요약글 의미 검토 결과를 해석하지 못함");
+  }
+}
+
+async function reviewApprovalSummary({apiKey, model, title, keyword, site, summary}) {
+  const response = await fetch(openAiResponsesUrl(), {
+    method: "POST",
+    headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
+    body: JSON.stringify({
+      model,
+      input: [
+        {role: "system", content: "너는 한국어 블로그 요약글의 품질을 엄격히 점검한다. JSON만 출력한다."},
+        {role: "user", content: [
+          `글 제목: ${title}`,
+          `메인키워드: ${keyword}`,
+          `사이트 글 방향: ${siteWritingFlow(site, "summary")}`,
+          `요약글: ${summary}`,
+          "다음 모두를 만족할 때만 pass를 true로 답한다.",
+          "- 요약글의 생활 장면과 설명이 제목의 구체적인 대상·상황·관계에 실제로 연결된다.",
+          "- 다른 제목에도 그대로 붙일 수 있는 공통 도입이나 공통 끝맺음이 아니다.",
+          "- 제목 일부를 기계적으로 잘라 붙인 흔적, 어색한 조사, 문법 오류가 없다.",
+          "- 다른 사이트의 주제가 섞이지 않았다. 단, 특정 단어가 다른 주제에서도 쓰인다는 이유만으로 실패시키지 말고 제목과의 연결로 판단한다.",
+          "반드시 {\"pass\":true 또는 false, \"reasons\":[\"짧은 이유\"]} 형식의 JSON만 출력한다.",
+        ].join("\n")},
+      ],
+      max_output_tokens: 220,
+    }),
+  });
+  const body = await response.text();
+  let data;
+  try { data = JSON.parse(body); } catch { throw new Error(`요약글 의미 검토 응답을 해석하지 못함: ${body.slice(0, 200)}`); }
+  if (!response.ok) throw new Error(`요약글 의미 검토 API 실패: ${data.error?.message || body.slice(0, 200)}`);
+  const reviewed = parseModelJsonObject(extractOutputText(data));
+  return {
+    pass: reviewed.pass === true,
+    reasons: Array.isArray(reviewed.reasons) ? reviewed.reasons.map((reason) => normalizeSpaces(reason)).filter(Boolean) : [],
+    usage: extractUsage(data),
+  };
+}
+
 function validateTitleKeywordConnection(text, title, focusKeyword, label) {
   const keywords = titleContentKeywords(title, focusKeyword);
   if (keywords.length && !keywords.some((keyword) => normalizeSpaces(text).includes(keyword))) {
@@ -527,6 +613,8 @@ function collectFullDraftErrors(html, title, {minChars = 0, focusKeyword = "", e
     errors.push("요약글을 만들지 못함");
   } else {
     check(() => validateApprovalSummaryMatch(html, summary, focusKeyword));
+    check(() => validateApprovalSummaryStyle(summary, {title}));
+    check(() => validateSummarySpecificity(summary, {title, focusKeyword}));
   }
   if (!normalizeSpaces(meta?.excerpt || "")) {
     errors.push("워드프레스 발췌문을 만들지 못함");
@@ -1797,9 +1885,9 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
   const previousOpenings = recentSummaries
     .map((item) => normalizeSpaces(item).split(/[.!?]/)[0])
     .filter(Boolean)
-    .slice(-8)
+    .slice(-12)
     .join(" | ");
-  let lastLength = 0;
+  let lastError = "";
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const response = await fetch(openAiResponsesUrl(), {
       method: "POST",
@@ -1812,19 +1900,19 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
             `글 제목: ${title}`,
             `메인키워드: ${keyword}`,
             "공백 포함 정확히 140~160자의 한국어 요약글을 작성한다.",
-            "한국인이 공감할 수 있는 일상 장면을 넣되, 글쓴이가 직접 겪었다는 사실을 꾸며내지 않는다.",
-            `첫 문장은 ${situationForTitle(title, site)}처럼 제목 주제와 연결된 생활 장면에서 시작한다. 제목 문구나 제목의 앞부분을 그대로 풀어 쓰며 시작하지 않는다.`,
-            "워드프레스 발췌문처럼 장면에서 출발하되, 본문 요약글은 그 장면의 궁금증과 제목의 원리·변화까지 더 충분히 이어 쓴다. 이전 요약글과 같은 첫 문장, 같은 도입 소재, 같은 끝맺음을 되풀이하지 않는다.",
-            "함께 짚어봅니다, 함께 살펴봅니다, 필요한 내용을 차근차근 살펴보겠습니다처럼 어느 제목에도 붙일 수 있는 빈 문장으로 끝내지 않는다.",
-            previousOpenings ? `피해야 할 기존 요약글 첫 문장: ${previousOpenings}` : "이전 요약글과 다른 도입 문장으로 쓴다.",
-            "제목에 들어 있는 구체적인 핵심 키워드를 1개 이상 문장에 그대로 넣는다. 제목 일부를 어색하게 자르거나 조사만 덧붙이지 않는다.",
+            "제목의 구체적인 대상·상황·관계에 맞는 생활 장면을 새로 고른다. 아래 참고 장면을 그대로 복사하지 않는다.",
+            `생활 장면 참고: ${situationForTitle(title, site)}`,
+            "첫 문장은 제목 문구나 제목 앞부분을 그대로 풀어 쓰지 않는다.",
+            "생활 장면 → 그 장면에서 생기는 궁금증 → 메인키워드 → 제목의 구체적인 내용과 독자가 확인할 점 순서로 자연스럽게 이어 쓴다.",
+            "제목의 구체적인 핵심어를 두 개 이상 자연스럽게 포함한다. 제목 일부를 잘라 조사만 붙이거나, 어느 제목에도 쓸 수 있는 문장으로 채우지 않는다.",
             `메인키워드 "${keyword}"를 문장 안에 1회 이상 그대로 넣는다.`,
             `사이트별 화자 말투: ${siteVoiceGuide(site)}`,
-            `사이트별 요약글 작성 순서: ${siteWritingFlow(site, "summary")}`,
-            "작성 순서는 문장을 복사하는 틀이 아니다. 제목의 구체적인 대상과 맞는 장면·질문·안내 내용을 새로 고르고, 제목과 무관한 공통 도입문이나 빈 끝맺음은 쓰지 않는다.",
+            `사이트별 요약글 작성 기준: ${siteWritingFlow(site, "summary")}`,
             "왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나를 자연스럽게 포함한다.",
-            "'자연스럽게 알아봅니다', '쉽게 살펴봅니다'처럼 글쓰기 방식을 설명하는 말은 쓰지 말고, 제목의 구체적인 내용과 이 글에서 알게 될 점을 말한다.",
-          ].join("\n")},
+            "이전 요약글과 같은 장면·도입 구조·끝맺음을 되풀이하지 않는다.",
+            previousOpenings ? `피해야 할 이전 첫 문장: ${previousOpenings}` : "",
+            "‘~을 따라가면’, ‘제목 속 변화’, ‘이 대상이 어느 계절과 방향’처럼 조립한 문장을 쓰지 않는다.",
+          ].filter(Boolean).join("\n")},
         ],
         max_output_tokens: 300,
       }),
@@ -1833,19 +1921,24 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
     let data;
     try { data = JSON.parse(body); } catch { throw new Error(`OpenAI 응답을 해석하지 못함: ${body.slice(0, 200)}`); }
     if (!response.ok) throw new Error(`OpenAI API 실패: ${data.error?.message || body.slice(0, 300)}`);
-    const summary = stripTags(extractOutputText(data)).replace(/[“”"'`]/g, "").replace(/\s+/g, " ").trim();
-    lastLength = [...summary].length;
-    const valid = lastLength >= 140 && lastLength <= 160 &&
-      summary.includes(keyword) &&
-      /[가-힣]/.test(summary) &&
-      requiredPhrases.some((phrase) => summary.includes(phrase));
-    if (valid) {
+    const summary = stripTags(extractOutputText(data)).replace(/[“”"'\`]/g, "").replace(/\s+/g, " ").trim();
+    try {
+      const length = [...summary].length;
+      if (length < 140 || length > 160) throw new Error(`요약글 글자 수가 조건과 다름 (${length}자 / 140~160자)`);
+      if (!summary.includes(keyword)) throw new Error("요약글에 메인키워드가 없음");
+      if (!/[가-힣]/.test(summary)) throw new Error("요약글이 한국어 문장 형식이 아님");
+      if (!requiredPhrases.some((phrase) => summary.includes(phrase))) throw new Error("요약글에 친근한 작성 계기 표현이 없음");
       validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, keyword, "요약글");
-      return {summary, usage: extractUsage(data)};
+      validateSummarySpecificity(summary, {title, focusKeyword: keyword, recentSummaries});
+      const review = await reviewApprovalSummary({apiKey, model, title, keyword, site, summary});
+      if (!review.pass) throw new Error(`요약글 의미 연결 검사 실패: ${review.reasons.join(", ") || "제목과의 연결이 약함"}`);
+      return {summary, usage: mergeUsage(extractUsage(data), review.usage)};
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
     }
   }
-  throw new Error(`요약글을 140~160자로 만들지 못함 (마지막 ${lastLength}자)`);
+  throw new Error(`요약글을 제목과 자연스럽게 연결하지 못함: ${lastError || "검사 실패"}`);
 }
 
 function objectParticle(word) {
@@ -2018,69 +2111,6 @@ function validateApprovalSummaryStyle(summary, {recentSummaries = [], title = ""
   const firstSentence = text.split(/[.!?]/)[0] || "";
   if (!/(때|보면|사용|연락|집|생활|느껴|경험|일상|밤하늘|농장|회의|모임|공원|하천|여행|역|화면|기록|주전자|창문)/.test(firstSentence)) throw new Error("요약글이 제목 주제와 맞는 장면으로 시작하지 않음");
 }
-function buildCompliantApprovalSummary({title, keyword, site = 0, recentSummaries = []}) {
-  const situation = situationForTitle(title, site, recentSummaries);
-  const titleWords = titleContentKeywords(title, keyword);
-  const topics = [titleWords.slice(0, 2).join(" "), titleWords.slice(0, 3).join(" "), titleWords.slice(0, 4).join(" "), topicForSummary(title)].filter(Boolean);
-  const guides = {1: "발명품의 원리와 생활의 변화를 살펴볼게요.", 2: "별자리를 찾는 기준을 살펴볼게요.", 3: "점검 순서와 대응 방법을 짚어볼게요.", 4: "내 판단을 점검하는 방법을 생각해 볼게요.", 5: "확인과 기록의 이유를 살펴볼게요.", 6: "여행에서 볼 수 있는 의미를 살펴볼게요."};
-  const endings = ["왜 필요했는지와 어떻게 달라졌는지 궁금해집니다.", "처음 어떤 문제를 풀려고 했는지 궁금해집니다.", "오늘의 모습으로 이어진 이유가 궁금해집니다."];
-  const additions = [" 제목 속 변화가 지금의 생활과 어떻게 이어지는지도 확인해 볼게요.", " 이 글에서 핵심 흐름과 쓰임을 차분히 살펴볼게요.", " 원리와 변화가 남긴 의미를 이어서 살펴볼게요."];
-  for (const topic of topics) for (const ending of endings) {
-    let summary = situation + " " + keyword + "을 따라가면 " + topic + "이 " + ending + " " + (guides[Number(site)] || "이 글에서 핵심 내용을 살펴볼게요.");
-    for (const addition of additions) if ([...summary].length < 140 && [...summary + addition].length <= 160) summary += addition;
-    if ([...summary].length >= 140 && [...summary].length <= 160) {
-      // 첫 후보가 기존 요약글과 겹쳐도 여기서 중단하지 않는다.
-      // 제목·장면·끝맺음을 바꾼 다음 후보를 모두 비교해 통과하는 문장만 고른다.
-      try {
-        validateApprovalSummaryStyle(summary, {recentSummaries, title});
-        validateTitleKeywordConnection(summary, title, keyword, "요약글");
-        return summary;
-      } catch {
-        continue;
-      }
-    }
-  }
-  throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
-}
-function topicForSummary(title) {
-  return titleCoreTopic(title).replace(/[.!?]/g, "").slice(0, 34).trim();
-}
-
-function forceCompliantApprovalSummary({title, keyword, site, recentSummaries = []}) {
-  const topic = (titleContentKeywords(title, keyword).slice(0, 3).join(" ") || topicForSummary(title)).slice(0, 26);
-  const openings = [
-    `밤하늘을 올려다보다 ${topic}라는 이름을 보면 어떤 모습인지 궁금해져요.`,
-    `별자리 지도를 펼쳤을 때 ${topic}를 발견하면 어느 하늘에서 볼 수 있을지 궁금해져요.`,
-    `저녁 하늘을 바라보다 ${topic}가 눈에 들어오면 왜 그렇게 보이는지 알고 싶어져요.`,
-  ];
-  const tails = [
-    ` ${keyword}에서는 이 대상이 어느 계절과 방향에서 보이는지, 왜 이런 특징을 보이는지 살펴보고 처음 관측할 때 확인할 기준과 찾는 순서를 정리해 볼게요. 계절과 시간을 함께 보면 한결 찾기 쉬워집니다.`,
-    ` ${keyword}를 따라가며 이 대상의 위치와 특징을 확인하고, 왜 계절과 관측 시간에 따라 모습이 달라 보이는지 알아볼게요. 처음 별을 찾을 때 필요한 기준도 함께 짚어봅니다.`,
-    ` ${keyword} 속에서 이 대상이 보이는 시기와 방향을 살피고, 왜 관측 조건에 따라 다르게 느껴지는지 알아볼게요. 별자리 지도를 볼 때 확인할 순서도 함께 정리합니다.`,
-  ];
-  for (const opening of openings) for (const tail of tails) {
-    let summary = opening + tail;
-    if ([...summary].length > 160) summary = opening + tail.replace(" 처음 별을 찾을 때 필요한 기준도 함께 짚어봅니다.", "").replace(" 별자리 지도를 볼 때 확인할 순서도 함께 정리합니다.", "");
-    if ([...summary].length < 140) summary += " 천천히 위치를 비교하면 더 잘 보입니다.";
-    if ([...summary].length >= 140 && [...summary].length <= 160) {
-      try {
-        validateApprovalSummaryStyle(summary, {recentSummaries, title});
-        validateTitleKeywordConnection(summary, title, keyword, "요약글");
-        return summary;
-      } catch {}
-    }
-  }
-  throw new Error("조건에 맞는 장면 중심 요약글을 만들지 못함");
-}
-
-function repairApprovalSummary({title, keyword, site, recentSummaries = []}) {
-  try {
-    return buildCompliantApprovalSummary({title, keyword, site, recentSummaries});
-  } catch {
-    return forceCompliantApprovalSummary({title, keyword, site, recentSummaries});
-  }
-}
-
 function summaryParagraphBlock(summary) {
   return `<!-- wp:paragraph -->\n<p>${escapeHtml(summary)}</p>\n<!-- /wp:paragraph -->`;
 }
@@ -2238,9 +2268,11 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     // 아래의 전체 수정·재검증 순환이 같은 원고에서 요약글·발췌문까지 함께 고친다.
     let summary = "";
     let summaryError = "";
+    let summaryUsage = {inputTokens: 0, outputTokens: 0, totalTokens: 0};
     try {
       const generatedSummary = await generateApprovalSummary({apiKey, model, title, keyword: 키워드, site, recentSummaries});
       summary = generatedSummary.summary;
+      summaryUsage = generatedSummary.usage;
       validateApprovalSummaryStyle(summary, {recentSummaries, title});
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
@@ -2249,7 +2281,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
       summary = "";
     }
     const 글자수 = stripTags(html).replace(/\s/g, "").length;
-    return {html, summary, summaryError, usage: extractUsage(data), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
+    return {html, summary, summaryError, usage: mergeUsage(extractUsage(data), summaryUsage), 글자수, 짧음: minChars > 0 && 글자수 < minChars};
   }
   validateArticleHtml(html, title, {minChars: 0});
   const 글자수 = stripTags(html).replace(/\s/g, "").length;
@@ -2669,15 +2701,13 @@ for (let index = 0; index < titles.length; index += 1) {
               apiKey: env.OPENAI_API_KEY, model, title, keyword: 이글키워드, site, recentSummaries,
             });
             articleSummary = generatedSummary.summary;
+            articleUsage = mergeUsage(articleUsage, generatedSummary.usage);
             summaryPreparationError = "";
-          } catch (generatedError) {
-            try {
-              articleSummary = repairApprovalSummary({title, keyword: 이글키워드, site, recentSummaries});
-              summaryPreparationError = "";
-            } catch (summaryError) {
-              summaryPreparationError = summaryError instanceof Error ? summaryError.message : String(summaryError);
-              cycleErrors.push(summaryPreparationError);
-            }
+          } catch (summaryError) {
+            // 제목과 연결되지 않은 공통 보정문을 만들지 않는다.
+            // 같은 제목의 새 요약글만 다음 순환에서 다시 생성하고, 계속 실패하면 보관한다.
+            summaryPreparationError = summaryError instanceof Error ? summaryError.message : String(summaryError);
+            cycleErrors.push(summaryPreparationError);
           }
         }
 
