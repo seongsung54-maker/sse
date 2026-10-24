@@ -112,15 +112,43 @@ function sanitizeEnglishSlug(value) {
   return slug;
 }
 
+const SEMANTIC_SLUG_TERMS = [
+  ["역사 속 발명", "history-inventions"], ["계절별 별자리", "seasonal-constellations"],
+  ["농업용 센서", "agricultural-sensors"], ["군중 심리", "crowd-psychology"],
+  ["외래 생물", "non-native-species"], ["덴마크의 철도시설", "denmark-railway-facilities"],
+  ["망원경", "telescope"], ["파인더", "finder"], ["성운", "nebula"], ["성단", "star-cluster"],
+  ["은하", "galaxy"], ["행성", "planet"], ["별자리", "constellations"], ["전동기", "electric-motor"],
+  ["발전기", "electric-generator"], ["증기기관", "steam-engine"], ["전신 케이블", "telegraph-cable"],
+  ["인쇄", "printing"], ["유리", "glassmaking"], ["농업", "agriculture"], ["센서", "sensor"],
+  ["관개", "irrigation"], ["토양", "soil"], ["군중", "crowd"], ["동조", "conformity"],
+  ["편견", "bias"], ["하천", "river"], ["생태계", "ecosystem"], ["침입종", "invasive-species"],
+  ["철도", "railway"], ["기차역", "train-station"], ["환승", "transit"], ["국경", "border-crossing"],
+];
+
+function isPlaceholderSlug(value) {
+  return /^(?:info-guide|article-guide|post-guide)(?:-[a-f0-9]{6,})?$/i.test(value)
+    || /^(?:semantic-english-slug|untitled-post|new-post)$/i.test(value);
+}
+
+function semanticFallbackSlug(title) {
+  const text = normalizeSpaces(String(title));
+  const terms = [];
+  for (const [korean, english] of SEMANTIC_SLUG_TERMS) {
+    if (text.includes(korean) && !terms.includes(english)) terms.push(english);
+  }
+  // 제목의 의미를 설명하는 단어가 두 개 이상일 때만 보조 슬러그로 쓴다.
+  // 한 개뿐이면 제목과 무관한 일반 주소를 만들지 않고 메타 생성 재시도를 유도한다.
+  if (terms.length < 2) return "";
+  return sanitizeEnglishSlug(terms.slice(0, 4).join("-"));
+}
+
 function fallbackSlug(title) {
-  const englishWords = String(title)
-    .toLowerCase()
-    .match(/[a-z0-9]+/g);
+  const englishWords = String(title).toLowerCase().match(/[a-z0-9]+/g);
   const words = (englishWords || [])
     .filter((word) => !["the", "and", "for", "with", "from", "into", "about"].includes(word))
     .slice(0, 6);
   if (words.length >= 2) return sanitizeEnglishSlug(words.join("-"));
-  return `info-guide-${hashText(title)}`;
+  return semanticFallbackSlug(title);
 }
 
 function compactKoreanPhrase(title) {
@@ -1055,9 +1083,13 @@ function ensureKeywordInAlt(altText, focusKeyword, title) {
   return `${keyword} 핵심 내용을 설명하는 ${compactKoreanPhrase(title).replace(/\s*정리$/, "")} 대표 이미지`.slice(0, 120).trim();
 }
 
-function ensureMetaDefaults(meta, title) {
+function ensureMetaDefaults(meta, title, {allowMissingSlug = false} = {}) {
   const focusKeyword = normalizeFocusKeyword(meta?.focusKeyword, title);
-  const slug = sanitizeEnglishSlug(meta?.slug) || fallbackSlug(title);
+  const generatedSlug = sanitizeEnglishSlug(meta?.slug);
+  const slug = generatedSlug && !isPlaceholderSlug(generatedSlug) ? generatedSlug : fallbackSlug(title);
+  if (!slug && !allowMissingSlug) {
+    throw new Error("제목 내용을 설명하는 영문 슬러그를 만들지 못함");
+  }
   const excerpt = normalizeSpaces(meta?.excerpt || `${title}에 대해 핵심 개념과 확인할 점을 정리한 글입니다.`).slice(0, 180);
   const categoryHint = normalizeSpaces(meta?.categoryHint || focusKeyword).slice(0, 40) || focusKeyword;
   const featuredImageAlt = ensureKeywordInAlt(meta?.featuredImageAlt, focusKeyword, title);
@@ -1501,14 +1533,14 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = "", sit
   };
 }
 
-function fallbackPostMeta(title) {
+function fallbackPostMeta(title, {allowMissingSlug = false} = {}) {
   return ensureMetaDefaults({
     slug: fallbackSlug(title),
     excerpt: `${title}에 대해 핵심 개념과 확인할 점을 정리한 글입니다.`,
     featuredImageAlt: `${title} 주제를 설명하는 대표 이미지`,
     featuredImageCaption: `${title}의 핵심 내용을 시각적으로 정리한 이미지입니다.`,
     imageScene: "",
-  }, title);
+  }, title, {allowMissingSlug});
 }
 
 function imageMimeType(outputFormat) {
@@ -2592,7 +2624,7 @@ for (let index = 0; index < titles.length; index += 1) {
       continue;
     }
     단계(index + 1, titles.length, "제목·키워드 정리하는 중");
-    let meta = fallbackPostMeta(title);
+    let meta = fallbackPostMeta(title, {allowMissingSlug: true});
     let metaUsage = {inputTokens: 0, outputTokens: 0, totalTokens: 0};
     const 이글키워드 = 대주제 && normalizeSpaces(title).includes(대주제) ? 대주제 : meta.focusKeyword;
 
