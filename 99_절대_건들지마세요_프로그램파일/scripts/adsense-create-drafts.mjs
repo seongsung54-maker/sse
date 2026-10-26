@@ -1880,6 +1880,11 @@ function postHasInlineImage(post, media) {
   return content.includes(`wp-image-${media.id}`) || content.includes(`"id":${media.id}`);
 }
 
+function isFatalOpenAIError(error) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /no credits remaining|insufficient_quota|exceeded your current quota|billing hard limit|credit balance is too low/i.test(message);
+}
+
 async function generateApprovalSummary({apiKey, model, title, keyword, site = 0, recentSummaries = []}) {
   const requiredPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
   const previousOpenings = recentSummaries
@@ -1935,6 +1940,7 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
       if (!review.pass) throw new Error(`요약글 의미 연결 검사 실패: ${review.reasons.join(", ") || "제목과의 연결이 약함"}`);
       return {summary, usage: mergeUsage(extractUsage(data), review.usage)};
     } catch (error) {
+      if (isFatalOpenAIError(error)) throw error;
       lastError = error instanceof Error ? error.message : String(error);
     }
   }
@@ -2277,6 +2283,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
       validateTitleKeywordConnection(summary, title, 키워드, "요약글");
       html = applyApprovalSummary(html, summary);
     } catch (error) {
+      if (isFatalOpenAIError(error)) throw error;
       summaryError = error instanceof Error ? error.message : String(error);
       summary = "";
     }
@@ -2704,6 +2711,7 @@ for (let index = 0; index < titles.length; index += 1) {
             articleUsage = mergeUsage(articleUsage, generatedSummary.usage);
             summaryPreparationError = "";
           } catch (summaryError) {
+            if (isFatalOpenAIError(summaryError)) throw summaryError;
             // 제목과 연결되지 않은 공통 보정문을 만들지 않는다.
             // 같은 제목의 새 요약글만 다음 순환에서 다시 생성하고, 계속 실패하면 보관한다.
             summaryPreparationError = summaryError instanceof Error ? summaryError.message : String(summaryError);
@@ -2742,6 +2750,7 @@ for (let index = 0; index < titles.length; index += 1) {
             if (!normalizeSpaces(meta.slug || "")) throw new Error("제목 내용에 맞는 영문 슬러그를 만들지 못함");
             metaReady = true;
           } catch (metaError) {
+            if (isFatalOpenAIError(metaError)) throw metaError;
             try {
               const fallback = buildExcerptFromSummaryScene(articleSummary, title, 이글키워드);
               meta = {
@@ -2786,6 +2795,7 @@ for (let index = 0; index < titles.length; index += 1) {
         통과 = true;
         break;
       } catch (repairError) {
+        if (isFatalOpenAIError(repairError)) throw repairError;
         마지막오류 = repairError instanceof Error ? repairError.message : String(repairError);
         if (수정시도 < 3) {
           console.log(`  전체 규칙을 고쳐 다시 점검하는 중 (${수정시도}/3)`);
@@ -2987,6 +2997,10 @@ for (let index = 0; index < titles.length; index += 1) {
     results.push({site, title, ok: false, error: message});
     console.log(`  실패: ${message}`);
     if (진행) 진행.글실패();
+    if (isFatalOpenAIError(error)) {
+      console.log("  OpenAI 크레딧 부족으로 남은 제목의 시도를 중단합니다.");
+      break;
+    }
   }
 }
 if (진행) 진행.끝(results.filter((item) => item.ok && !item.skipped).length > 0 ? "다 됐어요 ✅" : "끝 (새로 만든 글 없음)");
