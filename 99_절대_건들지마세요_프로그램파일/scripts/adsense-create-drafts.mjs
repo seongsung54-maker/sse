@@ -2208,7 +2208,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
 
   const userPrompt = [
     `제목: ${title}`,
-    `최소 글자수: 한국어 기준 ${minChars}자 이상`,
+    `본문 목표 글자수: 한국어 기준 3300~3800자 (최소 ${minChars}자 이상, 불필요한 반복으로 길이를 채우지 말 것)`,
     키워드 ? `포커스 키워드: "${키워드}" — 첫 문단 안에 그대로 1회, h2 소제목 중 하나에 1회, 본문 곳곳에 자연스럽게 3~5회 포함한다. 억지로 반복하지 않는다.` : "",
     "요청:",
     "- 초보자가 실제로 이해하고 따라할 수 있게 작성",
@@ -2693,13 +2693,17 @@ for (let index = 0; index < titles.length; index += 1) {
     let metaReady = false;
     let 통과 = false;
     let 마지막오류 = "";
+    // 비용 기록: 요약글·발췌문은 필요한 항목만 다시 만들고, 본문 전체 수정은 한 번만 허용한다.
+    const 보정기록 = {로컬: 0, 소개문부분수정: 0, 본문전체수정: 0};
 
     // 한 사이클은 전체 검사 → 발견한 모든 항목 수정 → 전체 재검사다.
     // 같은 제목의 본문을 새로 만들지 않고, 최대 세 번까지 그 원고만 고친다.
     for (let 수정시도 = 1; 수정시도 <= 3; 수정시도 += 1) {
       const cycleErrors = [];
       try {
+        const 보정전본문 = html;
         html = repairDraftCandidate(html, title, meta.focusKeyword);
+        if (html !== 보정전본문) 보정기록.로컬 += 1;
 
         // 요약글이 아직 없거나 직전 요약글 검사에서 실패했으면, 같은 본문에 새 요약글만 붙인다.
         if (!articleSummary) {
@@ -2709,6 +2713,7 @@ for (let index = 0; index < titles.length; index += 1) {
             });
             articleSummary = generatedSummary.summary;
             articleUsage = mergeUsage(articleUsage, generatedSummary.usage);
+            보정기록.소개문부분수정 += 1;
             summaryPreparationError = "";
           } catch (summaryError) {
             if (isFatalOpenAIError(summaryError)) throw summaryError;
@@ -2745,6 +2750,7 @@ for (let index = 0; index < titles.length; index += 1) {
               excerpt: repairExcerptVoice(generatedMeta.meta.excerpt, title),
             };
             metaUsage = mergeUsage(metaUsage, generatedMeta.usage);
+            보정기록.소개문부분수정 += 1;
             validateExcerpt(meta.excerpt, meta.focusKeyword, title);
             validateExcerptSituationMatch(articleSummary, meta);
             if (!normalizeSpaces(meta.slug || "")) throw new Error("제목 내용에 맞는 영문 슬러그를 만들지 못함");
@@ -2798,11 +2804,12 @@ for (let index = 0; index < titles.length; index += 1) {
         if (isFatalOpenAIError(repairError)) throw repairError;
         마지막오류 = repairError instanceof Error ? repairError.message : String(repairError);
         if (수정시도 < 3) {
-          console.log(`  전체 규칙을 고쳐 다시 점검하는 중 (${수정시도}/3)`);
+          console.log(`  오류 항목만 고쳐 다시 점검하는 중 (${수정시도}/3)`);
           const errors = 마지막오류.split(" | ").filter(Boolean);
+          const 소개문오류 = errors.some((error) => /(요약글|발췌문|슬러그|장면)/.test(error));
           const 본문오류 = errors.filter((error) => !/(요약글|발췌문|슬러그|장면)/.test(error));
-          // 요약글·발췌문 오류는 본문을 다시 쓰지 않는다. 같은 본문에 소개문만 다시 붙인다.
-          if (본문오류.length > 0) {
+          // 먼저 로컬 보정과 요약글·발췌문 부분 보정을 쓴다. 같은 본문 전체 재작성은 최대 한 번이다.
+          if (본문오류.length > 0 && 보정기록.본문전체수정 < 1) {
             const 수정본 = await reviseSameDraft({
               apiKey: env.OPENAI_API_KEY,
               model,
@@ -2813,7 +2820,10 @@ for (let index = 0; index < titles.length; index += 1) {
             });
             html = repairDraftCandidate(수정본.html, title, meta.focusKeyword);
             articleUsage = mergeUsage(articleUsage, 수정본.usage);
+            보정기록.본문전체수정 += 1;
           }
+          // 본문을 이미 한 번 고쳤다면 같은 전체 원고를 다시 호출하지 않는다.
+          // 남은 오류는 다음 전체 검사 후 재시도 보관함으로 넘긴다.
           if (errors.some((error) => /(요약글|장면)/.test(error))) {
             articleSummary = "";
             summaryPreparationError = "";
@@ -2848,7 +2858,7 @@ for (let index = 0; index < titles.length; index += 1) {
       });
       results.push({
         site, title, ok: false, skipped: true, reason: "validation-held",
-        summary: articleSummary, errors: 마지막오류.split(" | ").filter(Boolean),
+        summary: articleSummary, errors: 마지막오류.split(" | ").filter(Boolean), repairStats: 보정기록,
       });
       console.log(`  보관: 같은 원고를 세 번 수정·점검했지만 통과하지 못해 저장하지 않음 — 다음 제목으로 진행합니다.`);
       진행.글건너뜀();
@@ -2930,6 +2940,7 @@ for (let index = 0; index < titles.length; index += 1) {
       slug: post.slug || meta.slug,
       focusKeyword: meta.focusKeyword,
       summary: articleSummary,
+      repairStats: 보정기록,
       featuredImageAlt: meta.featuredImageAlt,
       featuredMediaId: featuredMedia.id,
       featuredImageUrl: featuredMedia.sourceUrl,
