@@ -2588,22 +2588,21 @@ if (!includeUsedTitles) {
   }
 }
 
-const heldRetryTitleKeys = new Set(
-  readRetryQueue(outputDir)
-    .filter((entry) => entry.status === "held")
-    .map((entry) => titleKey(entry.title)),
-);
+const retryEntries = readRetryQueue(outputDir)
+  .filter((entry) => entry.status === "held")
+  .map((entry) => ({...entry.titleEntry, title: entry.title, retryEntry: entry}));
+const heldRetryTitleKeys = new Set(retryEntries.map((entry) => titleKey(entry.title)));
 const usedTitleKeys = new Set([
   ...previousDraftHistory.map((entry) => titleKey(entry.title)),
   ...existingOnWordPress.titles.map((title) => titleKey(title)),
   ...heldRetryTitleKeys,
 ]);
-// 후보는 전부 무작위로 섞어 두고, 요청한 개수만큼 통과·저장될 때까지 다음 제목을 이어 처리한다.
+// 재검증 보관함 제목을 먼저 처리하고, 나머지는 무작위 새 제목으로 이어 쓴다.
 const requestedCount = limit > 0 ? limit : allTitleEntries.length;
 const selection = selectRandomUnusedTitleEntries(
   allTitleEntries, includeUsedTitles ? new Set() : usedTitleKeys, 0,
 );
-const titleEntries = selection.entries;
+const titleEntries = [...retryEntries, ...selection.entries];
 const titles = titleEntries.map((entry) => entry.title);
 if (titles.length === 0) {
   if (allTitleEntries.length > 0 && usedTitleKeys.size > 0 && !includeUsedTitles) {
