@@ -501,6 +501,26 @@ function validateExcerpt(excerpt, focusKeyword, title = "") {
   if (/[<>{}]/.test(text)) throw new Error("워드프레스 발췌문에 허용되지 않는 문자가 있음");
 }
 
+function validateHeadingBodyOrder(html) {
+  const headings = [...String(html || "").matchAll(/<h([23])\\b[^>]*>[\\s\\S]*?<\\/h\\1>/gi)];
+  for (let i = 0; i < headings.length; i += 1) {
+    const start = headings[i].index + headings[i][0].length;
+    const end = i + 1 < headings.length ? headings[i + 1].index : html.length;
+    const section = String(html).slice(start, end);
+    if (!/<(?:p|ul|figure|table)\\b/i.test(section) || !stripTags(section)) throw new Error("소제목 뒤에 설명 본문이 없음");
+  }
+}
+
+function validateFinalCoreSection(html) {
+  const headings = [...String(html || "").matchAll(/<h([23])\\b[^>]*>([\\s\\S]*?)<\\/h\\1>/gi)];
+  const finalHeading = headings.at(-1);
+  if (!finalHeading || Number(finalHeading[1]) !== 2 || stripTags(finalHeading[2]).trim() !== "이 글에서 기억할 핵심 포인트") throw new Error("마지막 h2가 '이 글에서 기억할 핵심 포인트'가 아님");
+  const tail = String(html).slice(finalHeading.index + finalHeading[0].length);
+  const paragraphs = [...tail.matchAll(/<p\\b[^>]*>([\\s\\S]*?)<\\/p>/gi)];
+  if (paragraphs.length < 1 || paragraphs.length > 2 || !paragraphs.every((x) => stripTags(x[1]).trim())) throw new Error("핵심 포인트 h2 아래에 1~2개의 설명 문단이 필요함");
+  if (/<h[23]\\b/i.test(tail) || /자주 묻는 질문|\\bQ\\.|\\bA\\./i.test(stripTags(tail))) throw new Error("핵심 포인트 아래에 FAQ·질문답변 형식은 쓸 수 없음");
+}
+
 function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expectedImages = null} = {}) {
   if (/<h1\b/i.test(html)) throw new Error("본문에 h1 태그가 남아 있음");
   validateHumanVoice(stripTags(html), "본문");
@@ -542,10 +562,8 @@ function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expe
   if (headings.some((heading) => heading.includes("마무리"))) {
     throw new Error("소제목에 마무리가 포함됨");
   }
-  const finalHeading = headings.at(-1) || "";
-  if (!/(핵심|기억|포인트|정리)/.test(finalHeading)) {
-    throw new Error("마지막 소제목이 핵심 포인트를 한 줄로 정리하지 않음");
-  }
+  validateHeadingBodyOrder(html);
+  validateFinalCoreSection(html);
 
   // ── 아래는 "조용히 망가진 글"을 잡기 위한 검사다.
   //    예전에는 글자수도, 표 모양도, 끊긴 태그도 보지 않아서
@@ -2216,7 +2234,8 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     키워드 ? `- 요약글에 포커스 키워드 "${키워드}"를 정확히 1회 이상 포함한다.` : "- 요약글에 제목의 핵심 키워드를 1회 이상 포함한다.",
     "- 요약글에는 왜, 어떻게, 할까요, 이유는, 이러한 경우에는 중 하나 이상의 친근한 표현을 자연스럽게 포함한다.",
     "- 중간에는 번호 목록을 쓰지 않는다. 단계별 설명이 필요하면 각 단계를 독립된 문단으로 풀어 쓴다.",
-    "- 본문을 정리하는 마지막 소제목에는 마무리라는 말을 쓰지 않는다. 독자가 기억할 핵심 포인트를 한 줄로 나타낸 소제목을 쓴다.",
+    "- 모든 h2·h3 소제목 바로 뒤에는 다음 소제목 전까지 설명 문단, 목록 또는 표가 반드시 하나 이상 있어야 한다. 소제목만 연달아 쓰지 않는다.",
+    "- 마지막 h2는 반드시 정확히 '이 글에서 기억할 핵심 포인트'로 쓴다. 그 뒤에는 1~2개의 설명 문단만 두고, 그 뒤에 다른 소제목·FAQ·질문답변을 쓰지 않는다.",
     "- 제목은 출력하지 않고, 요약글부터 본문으로 출력",
     "- 첫 h2는 제목과 다른 문구로 작성",
     "- 본문 전체를 워드프레스 블록 주석으로 감싼 HTML로 출력",
@@ -2308,8 +2327,8 @@ async function extendArticle({apiKey, model, title, html, 부족자수}) {
   const userPrompt = [
     `글 제목: ${title}`,
     `아래는 이미 쓰인 본문이다. 이 뒤에 이어 붙일 새 h2 소제목 단락을 2~3개 써라. 합쳐서 한국어 기준 ${목표}자 이상.`,
-    "새 단락 예: 자주 하는 실수, 상황별 적용 예시, 더 알아두면 좋은 점, 자주 묻는 질문(Q&A 형식의 h3 + p).",
-    "기존 소제목과 같은 주제는 다시 쓰지 않는다. 첫 블록은 h2로 시작한다.",
+    "새 단락 예: 자주 하는 실수, 상황별 적용 예시, 더 알아두면 좋은 점처럼 설명으로 이어지는 내용만 쓴다.",
+    "자주 묻는 질문, Q&A, 질문과 답변 형식은 쓰지 않는다. 기존 소제목과 같은 주제는 다시 쓰지 않는다. 첫 블록은 h2로 시작한다.",
     "",
     "----- 이미 쓰인 본문 -----",
     stripTags(html).slice(0, 6000),
