@@ -2994,6 +2994,12 @@ for (let index = 0; index < titles.length; index += 1) {
       estimated_usd: estimatedUsd,
       estimated_krw: estimatedKrw,
     });
+    // 재검증 보관함에서 통과한 제목은 즉시 꺼내 다음 실행에 다시 선택되지 않게 한다.
+    if (titleEntry.retryEntry) {
+      const retryFile = retryQueueFile(outputDir);
+      const remaining = readRetryQueue(outputDir).filter((entry) => titleKey(entry.title) !== titleKey(title));
+      writeFileSync(retryFile, JSON.stringify(remaining, null, 2), "utf8");
+    }
     const categorySourceLabel = selectedCategory?.source ? `(${selectedCategory.source})` : "";
     const categoryLabel = selectedCategory ? ` / 카테고리 ${selectedCategory.name}${categorySourceLabel}` : " / 카테고리 미지정";
     // 이 글은 위에서 results 에 이미 담겼다. 여기서 또 더하면 두 배로 세어진다.
