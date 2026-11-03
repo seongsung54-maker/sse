@@ -19,3 +19,9 @@ test("OpenAI and WordPress requests have abort timeouts", async () => {
   assert.match(draft, /AbortSignal\.timeout/);
   assert.match(wp, /AbortSignal\.timeout/);
 });
+
+test("manifest pins a commit that contains every loaded entry module", async () => {
+  const {execFileSync} = await import("node:child_process");
+  const manifest = JSON.parse(await read("앱/목록.json"));
+  assert.doesNotThrow(() => execFileSync("git", ["show", `${manifest.커밋}:앱/승인글.mjs`], {cwd: root, stdio: "pipe"}));
+});
