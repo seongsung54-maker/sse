@@ -1921,6 +1921,26 @@ function isFatalOpenAIError(error) {
   return /no credits remaining|insufficient_quota|exceeded your current quota|billing hard limit|credit balance is too low/i.test(message);
 }
 
+function padApprovalSummaryToRequiredLength(summary, site) {
+  let text = normalizeSpaces(summary);
+  if ([...text].length >= 140) return text;
+  const additions = {
+    1: ["생활 속 쓰임과 당시의 변화를 함께 살피면 흐름이 더 또렷해집니다.", "관련된 변화도 함께 살펴볼게요.", "핵심 흐름도 확인해 볼게요."],
+    2: ["별자리의 모양과 주변 별을 함께 비교하면 처음 보는 하늘도 훨씬 편하게 읽을 수 있습니다.", "관측 시기와 위치도 함께 살펴볼게요.", "주변 별도 함께 확인해 볼게요."],
+    3: ["기록한 수치와 실제 재배 환경을 같이 보면 다음 점검 순서를 정하기가 한결 수월해집니다.", "재배 환경도 함께 확인해 볼게요.", "점검 순서도 살펴볼게요."],
+    4: ["그때 떠오른 생각과 주변 반응을 나란히 보면 내 판단을 다시 살필 실마리를 찾을 수 있습니다.", "내 생각도 함께 돌아볼게요.", "판단의 기준도 살펴볼게요."],
+    5: ["눈에 띈 특징과 발견 장소를 함께 기록하면 주변 생물을 이해하는 데 더 도움이 됩니다.", "기록할 점도 함께 살펴볼게요.", "주변 모습도 확인해 볼게요."],
+    6: ["역의 동선과 주변 풍경을 함께 보면 여행 중 마주치는 공간이 더 가깝게 느껴질 수 있습니다.", "여행에 필요한 점도 살펴볼게요.", "주변 공간도 함께 볼게요."],
+  };
+  const candidates = additions[Number(site)] || ["관련된 장면과 기준을 함께 살피면 내용을 더 또렷하게 이해할 수 있습니다.", "관련된 기준도 함께 살펴볼게요.", "핵심도 확인해 볼게요."];
+  for (const addition of candidates) {
+    const combined = normalizeSpaces(text + " " + addition);
+    const length = [...combined].length;
+    if (length >= 140 && length <= 160) return combined;
+  }
+  return text;
+}
+
 async function generateApprovalSummary({apiKey, model, title, keyword, site = 0, recentSummaries = []}) {
   const requiredPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
   const previousOpenings = recentSummaries
@@ -1962,7 +1982,8 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
     let data;
     try { data = JSON.parse(body); } catch { throw new Error(`OpenAI 응답을 해석하지 못함: ${body.slice(0, 200)}`); }
     if (!response.ok) throw new Error(`OpenAI API 실패: ${data.error?.message || body.slice(0, 300)}`);
-    const summary = stripTags(extractOutputText(data)).replace(/[“”"'\`]/g, "").replace(/\s+/g, " ").trim();
+    let summary = stripTags(extractOutputText(data)).replace(/[“”"'\`]/g, "").replace(/\s+/g, " ").trim();
+    summary = padApprovalSummaryToRequiredLength(summary, site);
     try {
       const length = [...summary].length;
       if (length < 140 || length > 160) throw new Error(`요약글 글자 수가 조건과 다름 (${length}자 / 140~160자)`);
@@ -2195,6 +2216,32 @@ function removeEmptyHeadingSections(html) {
   return (output + source.slice(cursor)).trim();
 }
 
+function ensureHeadingBodies(html, title) {
+  const source = String(html || "");
+  const headings = [...source.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)];
+  if (headings.length === 0) return source;
+  let output = "";
+  let cursor = 0;
+  for (let index = 0; index < headings.length; index += 1) {
+    const heading = headings[index];
+    const next = headings[index + 1];
+    const start = heading.index + heading[0].length;
+    const end = next ? next.index : source.length;
+    const section = source.slice(start, end);
+    const headingText = stripTags(heading[2]).replace(/\s+/g, " ").trim();
+    const hasBody = /<(?:p|ul|figure|table)\b/i.test(section) && Boolean(stripTags(section).trim());
+    output += source.slice(cursor, start);
+    if (!hasBody) {
+      const sentence = headingText === "이 글에서 기억할 핵심 포인트"
+        ? title + "를 살필 때는 앞에서 확인한 내용과 실제 쓰임을 함께 연결해 보는 것이 중요합니다."
+        : headingText + "은 " + title + "의 흐름을 이해할 때 먼저 짚어 볼 내용입니다.";
+      output += "\n\n" + summaryParagraphBlock(sentence);
+    }
+    cursor = start;
+  }
+  return (output + source.slice(cursor)).trim();
+}
+
 function repairDraftCandidate(html, title, focusKeyword = "") {
   let repaired = convertOrderedListsToParagraphs(html)
     // 일부 생성기가 태그 이름을 Gutenberg 블록 이름으로 잘못 쓰는 경우를 표준 이름으로 고친다.
@@ -2239,6 +2286,7 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
     repaired += "\n\n<!-- wp:heading -->\n<h2>이 글에서 기억할 핵심 포인트</h2>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>" + escapeHtml(title) + "를 이해할 때는 변화의 흐름과 오늘의 생활에 이어진 의미를 함께 살피는 것이 중요합니다.</p>\n<!-- /wp:paragraph -->";
   }
   repaired = removeEmptyHeadingSections(repaired);
+  repaired = ensureHeadingBodies(repaired, title);
   repaired = normalizeArticleHtml(repaired, title);
   const normalizedHeadings = [...repaired.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)];
   const normalizedFinal = normalizedHeadings.at(-1);
