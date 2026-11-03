@@ -2297,7 +2297,7 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
   const finalHeading = headings.at(-1);
   if (finalHeading) {
     const finalText = stripTags(finalHeading[1]).replace(/\s+/g, " ").trim();
-    if (finalText.includes("마무리") || !/(핵심|기억|포인트|정리)/.test(finalText) || !/^<h2\b/i.test(finalHeading[0])) {
+    if (finalText !== "이 글에서 기억할 핵심 포인트" || !/^<h2\b/i.test(finalHeading[0])) {
       const tag = /^<h([23])\b/i.exec(finalHeading[0])?.[1] || "2";
       repaired = repaired.slice(0, finalHeading.index) + "<h2>이 글에서 기억할 핵심 포인트</h2>" + repaired.slice(finalHeading.index + finalHeading[0].length);
     }
