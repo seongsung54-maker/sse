@@ -2156,6 +2156,27 @@ function convertOrderedListsToParagraphs(html) {
   return converted.replace(/<ol\b[^>]*>([\s\S]*?)<\/ol>/gi, (_list, listBody) => paragraphBlocks(listBody));
 }
 
+function removeEmptyHeadingSections(html) {
+  const source = String(html || "");
+  const blocks = [...source.matchAll(/<!--\s*wp:heading(?:\s+\{[^}]*\})?\s*-->\s*<h([23])\b[^>]*>([\s\S]*?)<\/h\1>\s*<!--\s*\/wp:heading\s*-->/gi)];
+  if (blocks.length === 0) return source;
+  let output = "";
+  let cursor = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    const next = blocks[index + 1];
+    const section = source.slice(block.index + block[0].length, next ? next.index : source.length);
+    const text = stripTags(block[2]).replace(/\s+/g, " ").trim();
+    const hasBody = /<(?:p|ul|figure|table)\b/i.test(section) && Boolean(stripTags(section));
+    const isFinalCore = text === "이 글에서 기억할 핵심 포인트";
+    if (!hasBody && !isFinalCore) {
+      output += source.slice(cursor, block.index);
+      cursor = block.index + block[0].length;
+    }
+  }
+  return (output + source.slice(cursor)).trim();
+}
+
 function repairDraftCandidate(html, title, focusKeyword = "") {
   let repaired = convertOrderedListsToParagraphs(html)
     // 일부 생성기가 태그 이름을 Gutenberg 블록 이름으로 잘못 쓰는 경우를 표준 이름으로 고친다.
@@ -2192,12 +2213,22 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
   const finalHeading = headings.at(-1);
   if (finalHeading) {
     const finalText = stripTags(finalHeading[1]).replace(/\s+/g, " ").trim();
-    if (finalText.includes("마무리") || !/(핵심|기억|포인트|정리)/.test(finalText)) {
+    if (finalText.includes("마무리") || !/(핵심|기억|포인트|정리)/.test(finalText) || !/^<h2\b/i.test(finalHeading[0])) {
       const tag = /^<h([23])\b/i.exec(finalHeading[0])?.[1] || "2";
-      repaired = repaired.slice(0, finalHeading.index) + "<h" + tag + ">이 글에서 기억할 핵심 포인트</h" + tag + ">" + repaired.slice(finalHeading.index + finalHeading[0].length);
+      repaired = repaired.slice(0, finalHeading.index) + "<h2>이 글에서 기억할 핵심 포인트</h2>" + repaired.slice(finalHeading.index + finalHeading[0].length);
     }
   } else {
     repaired += "\n\n<!-- wp:heading -->\n<h2>이 글에서 기억할 핵심 포인트</h2>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>" + escapeHtml(title) + "를 이해할 때는 변화의 흐름과 오늘의 생활에 이어진 의미를 함께 살피는 것이 중요합니다.</p>\n<!-- /wp:paragraph -->";
+  }
+  repaired = removeEmptyHeadingSections(repaired);
+  repaired = normalizeArticleHtml(repaired, title);
+  const normalizedHeadings = [...repaired.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)];
+  const normalizedFinal = normalizedHeadings.at(-1);
+  if (normalizedFinal && Number(normalizedFinal[1]) === 2 && stripTags(normalizedFinal[2]).trim() === "이 글에서 기억할 핵심 포인트") {
+    const tail = repaired.slice(normalizedFinal.index + normalizedFinal[0].length);
+    if (!/<p\b[^>]*>[\s\S]*?<\/p>/i.test(tail)) {
+      repaired += "\n\n" + summaryParagraphBlock(title + "의 핵심은 원리와 실제 쓰임을 함께 연결해 살피는 데 있습니다.");
+    }
   }
   return repaired.trim();
 }
