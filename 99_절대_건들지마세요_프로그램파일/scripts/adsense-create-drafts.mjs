@@ -502,7 +502,7 @@ function validateExcerpt(excerpt, focusKeyword, title = "") {
 }
 
 function validateHeadingBodyOrder(html) {
-  const headings = [...String(html || "").matchAll(/<h([23])\\b[^>]*>[\\s\\S]*?<\\/h\\1>/gi)];
+  const headings = [...String(html || "").matchAll(/<h([23])\b[^>]*>[\s\S]*?<\/h\1>/gi)];
   for (let i = 0; i < headings.length; i += 1) {
     const start = headings[i].index + headings[i][0].length;
     const end = i + 1 < headings.length ? headings[i + 1].index : html.length;
@@ -512,11 +512,11 @@ function validateHeadingBodyOrder(html) {
 }
 
 function validateFinalCoreSection(html) {
-  const headings = [...String(html || "").matchAll(/<h([23])\\b[^>]*>([\\s\\S]*?)<\\/h\\1>/gi)];
+  const headings = [...String(html || "").matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)];
   const finalHeading = headings.at(-1);
   if (!finalHeading || Number(finalHeading[1]) !== 2 || stripTags(finalHeading[2]).trim() !== "이 글에서 기억할 핵심 포인트") throw new Error("마지막 h2가 '이 글에서 기억할 핵심 포인트'가 아님");
   const tail = String(html).slice(finalHeading.index + finalHeading[0].length);
-  const paragraphs = [...tail.matchAll(/<p\\b[^>]*>([\\s\\S]*?)<\\/p>/gi)];
+  const paragraphs = [...tail.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)];
   if (paragraphs.length < 1 || paragraphs.length > 2 || !paragraphs.every((x) => stripTags(x[1]).trim())) throw new Error("핵심 포인트 h2 아래에 1~2개의 설명 문단이 필요함");
   if (/<h[23]\\b/i.test(tail) || /자주 묻는 질문|\\bQ\\.|\\bA\\./i.test(stripTags(tail))) throw new Error("핵심 포인트 아래에 FAQ·질문답변 형식은 쓸 수 없음");
 }
