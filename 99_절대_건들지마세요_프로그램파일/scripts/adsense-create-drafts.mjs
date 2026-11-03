@@ -507,7 +507,7 @@ function validateHeadingBodyOrder(html) {
     const start = headings[i].index + headings[i][0].length;
     const end = i + 1 < headings.length ? headings[i + 1].index : html.length;
     const section = String(html).slice(start, end);
-    if (!/<(?:p|ul|figure|table)\\b/i.test(section) || !stripTags(section)) throw new Error("소제목 뒤에 설명 본문이 없음");
+    if (!/<(?:p|ul|figure|table)\b/i.test(section) || !stripTags(section)) throw new Error("소제목 뒤에 설명 본문이 없음");
   }
 }
 
@@ -518,7 +518,7 @@ function validateFinalCoreSection(html) {
   const tail = String(html).slice(finalHeading.index + finalHeading[0].length);
   const paragraphs = [...tail.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)];
   if (paragraphs.length < 1 || paragraphs.length > 2 || !paragraphs.every((x) => stripTags(x[1]).trim())) throw new Error("핵심 포인트 h2 아래에 1~2개의 설명 문단이 필요함");
-  if (/<h[23]\\b/i.test(tail) || /자주 묻는 질문|\\bQ\\.|\\bA\\./i.test(stripTags(tail))) throw new Error("핵심 포인트 아래에 FAQ·질문답변 형식은 쓸 수 없음");
+  if (/<h[23]\b/i.test(tail) || /자주 묻는 질문|\bQ\\.|\bA\\./i.test(stripTags(tail))) throw new Error("핵심 포인트 아래에 FAQ·질문답변 형식은 쓸 수 없음");
 }
 
 function validateArticleHtml(html, title, {minChars = 0, focusKeyword = "", expectedImages = null} = {}) {
