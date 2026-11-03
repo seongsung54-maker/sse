@@ -15,7 +15,11 @@ import {fileURLToPath} from "node:url";
 import {Worker} from "node:worker_threads";
 import {homedir} from "node:os";
 
-export const 버전 = "2026-10-23d";
+export const 버전 = "2026-11-03a";
+
+// Codex 도구 호출은 5분에 응답을 끊으므로, 한 글 Worker는 그 전에 종료 결과를 돌려준다.
+const ARTICLE_WORKER_TIMEOUT_SECONDS = 240;
+const ARTICLE_LOCK_STALE_MS = 6 * 60 * 1000;
 
 const 여기 = dirname(fileURLToPath(import.meta.url));            // <임시>/앱
 const 프로그램폴더 = join(여기, "..", "99_절대_건들지마세요_프로그램파일");
@@ -445,7 +449,7 @@ export async function 잠금으로({작업폴더, 이름, 일}) {
     let 살아있음 = true;
     const 프로세스 = globalThis.process;
     if (pid && 프로세스 && typeof 프로세스.kill === "function") { try { 프로세스.kill(pid, 0); } catch { 살아있음 = false; } }
-    if (살아있음 && Date.now() - s.mtimeMs < 20 * 60 * 1000) {
+    if (살아있음 && Date.now() - s.mtimeMs < ARTICLE_LOCK_STALE_MS) {
       return {결과: "이미 하는 중", 안내: "앞에서 시작한 작업이 아직 돌고 있어요. 끝날 때까지 기다린 뒤 결과를 보세요. 같은 명령을 다시 실행하지 않는다."};
     }
   } catch {}
@@ -501,7 +505,7 @@ async function 글만들기본체({작업폴더, 사이트 = 1, 개수 = 1, 날�
     } catch {}
     if (오늘만든 > 0) argv.push(`--date-offset=${오늘만든}`);
   }
-  const r = await 실행({작업폴더, 스크립트이름: "adsense-create-drafts.mjs", argv});
+  const r = await 실행({작업폴더, 스크립트이름: "adsense-create-drafts.mjs", argv, 시간초: ARTICLE_WORKER_TIMEOUT_SECONDS});
 
   const 줄 = r.출력.split("\n");
   const 게이지 = [...줄].reverse().find((l) => /^\[[■□]+\]/.test(l.trim())) || "";

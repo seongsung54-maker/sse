@@ -409,7 +409,7 @@ function parseModelJsonObject(text) {
 }
 
 async function reviewApprovalSummary({apiKey, model, title, keyword, site, summary}) {
-  const response = await fetch(openAiResponsesUrl(), {
+  const response = await openAiFetch(openAiResponsesUrl(), {
     method: "POST",
     headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
     body: JSON.stringify({
@@ -647,7 +647,7 @@ function collectFullDraftErrors(html, title, {minChars = 0, focusKeyword = "", e
 }
 
 async function reviseSameDraft({apiKey, model, title, html, errors, focusKeyword = ""}) {
-  const response = await fetch(openAiResponsesUrl(), {
+  const response = await openAiFetch(openAiResponsesUrl(), {
     method: "POST",
     headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
     body: JSON.stringify({
@@ -1070,6 +1070,24 @@ let 진행 = null;
 function 단계(글번호, 전체, 문구, 제목 = "") {
   if (진행) 진행.단계(글번호, 단계번호표[문구] || 0, 문구, 제목);
   else console.log(`[${글번호}/${전체}] ${문구}`);
+}
+
+function openAiRequestTimeoutMs() {
+  const requested = Number(env?.OPENAI_REQUEST_TIMEOUT_MS || 90000);
+  return Number.isFinite(requested) ? Math.min(Math.max(requested, 10000), 120000) : 90000;
+}
+
+async function openAiFetch(url, options = {}) {
+  const {signal: callerSignal, ...rest} = options;
+  const timeoutMs = openAiRequestTimeoutMs();
+  try {
+    return await fetch(url, {...rest, signal: callerSignal || AbortSignal.timeout(timeoutMs)});
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      throw new Error(`OpenAI 요청이 ${Math.round(timeoutMs / 1000)}초 안에 끝나지 않았습니다`);
+    }
+    throw error;
+  }
 }
 
 function openAiResponsesUrl() {
@@ -1607,7 +1625,7 @@ async function generatePostMeta({apiKey, model, title, 고정키워드 = "", sit
     "}",
   ].join("\n");
 
-  const response = await fetch(openAiResponsesUrl(), {
+  const response = await openAiFetch(openAiResponsesUrl(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -1708,7 +1726,7 @@ async function generateFeaturedImage({apiKey, title, meta, usdKrw}) {
   const imageSize = env.IMAGE_SIZE || DEFAULT_IMAGE_SIZE;
   const imageOutputFormat = env.IMAGE_OUTPUT_FORMAT || DEFAULT_IMAGE_OUTPUT_FORMAT;
 
-  const response = await fetch(openAiImagesUrl(), {
+  const response = await openAiFetch(openAiImagesUrl(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -1745,7 +1763,7 @@ async function generateFeaturedImage({apiKey, title, meta, usdKrw}) {
   if (imageItem.b64_json) {
     buffer = Buffer.from(imageItem.b64_json, "base64");
   } else if (imageItem.url) {
-    const imageResponse = await fetch(imageItem.url);
+    const imageResponse = await openAiFetch(imageItem.url);
     if (!imageResponse.ok) {
       throw new Error(`OpenAI 이미지 URL 다운로드 실패: HTTP ${imageResponse.status}`);
     }
@@ -1912,7 +1930,7 @@ async function generateApprovalSummary({apiKey, model, title, keyword, site = 0,
     .join(" | ");
   let lastError = "";
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const response = await fetch(openAiResponsesUrl(), {
+    const response = await openAiFetch(openAiResponsesUrl(), {
       method: "POST",
       headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
       body: JSON.stringify({
@@ -2275,7 +2293,7 @@ async function generateArticle({apiKey, model, title, minChars, 키워드 = "", 
     "- 표는 모든 행의 칸 수가 같아야 함",
   ].join("\n");
 
-  const response = await fetch(openAiResponsesUrl(), {
+  const response = await openAiFetch(openAiResponsesUrl(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -2364,7 +2382,7 @@ async function extendArticle({apiKey, model, title, html, 부족자수}) {
     "----- 이미 쓰인 본문 -----",
     stripTags(html).slice(0, 6000),
   ].join("\n");
-  const response = await fetch(openAiResponsesUrl(), {
+  const response = await openAiFetch(openAiResponsesUrl(), {
     method: "POST",
     headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
     body: JSON.stringify({model, input: [{role: "system", content: systemPrompt}, {role: "user", content: userPrompt}], max_output_tokens: Number(env.ARTICLE_MAX_OUTPUT_TOKENS || 12000)}),

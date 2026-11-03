@@ -19,6 +19,7 @@ const BROWSER_UA =
 
 // 사이트별로 '이 사이트는 ?rest_route= 로 가야 한다'를 기억한다 (origin 기준)
 const preferRestRoute = new Set();
+const DEFAULT_WP_REQUEST_TIMEOUT_MS = 30_000;
 
 function originOf(url) {
   try {
@@ -109,7 +110,17 @@ export async function wpFetch(url, options = {}) {
   const firstUrl = preferRestRoute.has(origin) && altUrl ? altUrl : url;
 
   const send = async (target) => {
-    const response = await fetch(target, {...options, headers});
+    const {signal: callerSignal, ...requestOptions} = options;
+    const timeoutMs = Number(process.env.WP_REQUEST_TIMEOUT_MS || DEFAULT_WP_REQUEST_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(target, {...requestOptions, headers, signal: callerSignal || AbortSignal.timeout(timeoutMs)});
+    } catch (error) {
+      if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+        throw new Error(`워드프레스 요청이 ${Math.round(timeoutMs / 1000)}초 안에 끝나지 않았습니다`);
+      }
+      throw error;
+    }
     // 판정을 위해 본문을 한 번 읽고, 호출부가 다시 읽을 수 있게 새 Response 로 감싼다
     const bodyText = await response.text();
     const wrapped = new Response(bodyText, {
