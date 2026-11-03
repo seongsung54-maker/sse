@@ -1923,7 +1923,11 @@ function isFatalOpenAIError(error) {
 
 function padApprovalSummaryToRequiredLength(summary, site) {
   let text = normalizeSpaces(summary);
-  if ([...text].length >= 140) return text;
+  const friendlyPhrases = ["왜", "어떻게", "할까요", "이유는", "이러한 경우에는"];
+  if (text && !friendlyPhrases.some((phrase) => text.includes(phrase))) {
+    text = normalizeSpaces(text + " 왜 그런지 함께 확인해 볼게요.");
+  }
+  if ([...text].length >= 140 && [...text].length <= 160) return text;
   const additions = {
     1: ["생활 속 쓰임과 당시의 변화를 함께 살피면 흐름이 더 또렷해집니다.", "관련된 변화도 함께 살펴볼게요.", "핵심 흐름도 확인해 볼게요."],
     2: ["별자리의 모양과 주변 별을 함께 비교하면 처음 보는 하늘도 훨씬 편하게 읽을 수 있습니다.", "관측 시간과 하늘의 방향을 먼저 함께 살펴보면 좋습니다.", "계절에 따른 하늘의 모습도 함께 확인해 볼게요.", "하늘의 방향과 주변 별도 함께 확인해 볼게요.", "관측 시간과 하늘의 방향도 함께 살펴볼게요.", "처음에는 관측 시간부터 살피면 좋습니다.", "주변 별의 위치도 함께 확인해 볼게요.", "관측 시기와 위치도 함께 살펴볼게요.", "관측 시간도 함께 확인해 볼게요.", "주변 별도 함께 확인해 볼게요."],
@@ -2805,6 +2809,8 @@ for (let index = 0; index < titles.length; index += 1) {
     let html = made.html;
     let articleUsage = made.usage;
     let articleSummary = made.summary || "";
+    // 본문 생성 단계가 만든 요약글도 별도 요약글과 같은 길이·말투 보완을 먼저 거친다.
+    articleSummary = padApprovalSummaryToRequiredLength(articleSummary, site);
     let summaryPreparationError = made.summaryError || "";
     let metaReady = false;
     let 통과 = false;
@@ -2842,6 +2848,7 @@ for (let index = 0; index < titles.length; index += 1) {
 
         if (articleSummary) {
           try {
+            articleSummary = padApprovalSummaryToRequiredLength(articleSummary, site);
             validateApprovalSummaryStyle(articleSummary, {recentSummaries, title});
             validateTitleKeywordConnection(articleSummary, title, 이글키워드, "요약글");
             html = applyApprovalSummary(html, articleSummary);
