@@ -2685,7 +2685,7 @@ if (!includeUsedTitles) {
   }
 }
 
-const retryEntries = readRetryQueue(outputDir)
+const retryEntries = readRetryQueue(visibleOutputDir)
   .filter((entry) => entry.status === "held")
   .map((entry) => ({...entry.titleEntry, title: entry.title, retryEntry: entry}));
 const heldRetryTitleKeys = new Set(retryEntries.map((entry) => titleKey(entry.title)));
@@ -2960,7 +2960,7 @@ for (let index = 0; index < titles.length; index += 1) {
       // 한 번의 세트는 전체 검사 → 발견한 모든 오류 수정 → 전체 재검사다.
       // 세 세트를 모두 써도 실패하면 새 원고를 만들거나 같은 제목을 다시 뽑지 않는다.
       // 원고를 보관 목록에 남기고 이번 요청의 다음 제목으로 계속 진행한다.
-      upsertRetryQueueEntry(outputDir, {
+      upsertRetryQueueEntry(visibleOutputDir, {
         site,
         title,
         titleEntry,
@@ -2978,6 +2978,9 @@ for (let index = 0; index < titles.length; index += 1) {
       });
       console.log(`  보관: 같은 원고를 세 번 수정·점검했지만 통과하지 못해 저장하지 않음 — 다음 제목으로 진행합니다.`);
       진행.글건너뜀();
+      // 1개 요청은 이 제목의 오류를 실제 보관함에 남긴 뒤 끝낸다.
+      // 여러 실패 제목을 한 호출에서 반복 생성해 비용과 시간을 키우지 않는다.
+      if (limit > 0) break;
       continue;
     }
     const usage = mergeUsage(metaUsage, articleUsage);
