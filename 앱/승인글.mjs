@@ -15,7 +15,7 @@ import {fileURLToPath} from "node:url";
 import {Worker} from "node:worker_threads";
 import {homedir} from "node:os";
 
-export const 버전 = "2026-11-03a";
+export const 버전 = "2026-11-03b";
 
 // Codex 도구 호출은 5분에 응답을 끊으므로, 한 글 Worker는 그 전에 종료 결과를 돌려준다.
 const ARTICLE_WORKER_TIMEOUT_SECONDS = 240;

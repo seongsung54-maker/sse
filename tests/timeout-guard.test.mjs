@@ -25,3 +25,8 @@ test("manifest pins a commit that contains every loaded entry module", async () 
   const manifest = JSON.parse(await read("앱/목록.json"));
   assert.doesNotThrow(() => execFileSync("git", ["show", `${manifest.커밋}:앱/승인글.mjs`], {cwd: root, stdio: "pipe"}));
 });
+
+test("fresh titles are attempted before held retry titles", async () => {
+  const draft = await read("99_절대_건들지마세요_프로그램파일/scripts/adsense-create-drafts.mjs");
+  assert.match(draft, /const titleEntries = \[\.\.\.selection\.entries, \.\.\.retryEntries\];/);
+});

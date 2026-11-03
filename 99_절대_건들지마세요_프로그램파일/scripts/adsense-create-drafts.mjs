@@ -2646,12 +2646,12 @@ const usedTitleKeys = new Set([
   ...existingOnWordPress.titles.map((title) => titleKey(title)),
   ...heldRetryTitleKeys,
 ]);
-// 재검증 보관함 제목을 먼저 처리하고, 나머지는 무작위 새 제목으로 이어 쓴다.
+// 재검증 보관함은 보존하되, 일반 생성에서는 새 제목을 먼저 처리한다. 보관 항목이 새 임시글 저장을 막지 않게 한다.
 const requestedCount = limit > 0 ? limit : allTitleEntries.length;
 const selection = selectRandomUnusedTitleEntries(
   allTitleEntries, includeUsedTitles ? new Set() : usedTitleKeys, 0,
 );
-const titleEntries = [...retryEntries, ...selection.entries];
+const titleEntries = [...selection.entries, ...retryEntries];
 const titles = titleEntries.map((entry) => entry.title);
 if (titles.length === 0) {
   if (allTitleEntries.length > 0 && usedTitleKeys.size > 0 && !includeUsedTitles) {
