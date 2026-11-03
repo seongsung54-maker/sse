@@ -2948,7 +2948,10 @@ for (let index = 0; index < titles.length; index += 1) {
           const 소개문오류 = errors.some((error) => /(요약글|발췌문|슬러그|장면)/.test(error));
           const 본문오류 = errors.filter((error) => !/(요약글|발췌문|슬러그|장면)/.test(error));
           // 먼저 로컬 보정과 요약글·발췌문 부분 보정을 쓴다. 같은 본문 전체 재작성은 최대 한 번이다.
-          if (본문오류.length > 0 && 보정기록.본문전체수정 < 1) {
+          // 소제목·핵심 포인트·블록 구조 오류는 먼저 로컬 보정만 다시 검사한다.
+          // 이미 같은 원고를 크게 고치지 않아도 되는 오류에 전체 원고 API 수정을 쓰지 않는다.
+          const 로컬보정가능본문오류 = 본문오류.length > 0 && 본문오류.every((error) => /(소제목|핵심 포인트|Gutenberg 블록|번호 목록|메인키워드가 굵게)/.test(error));
+          if (본문오류.length > 0 && !로컬보정가능본문오류 && 보정기록.본문전체수정 < 1) {
             const 수정본 = await reviseSameDraft({
               apiKey: env.OPENAI_API_KEY,
               model,
