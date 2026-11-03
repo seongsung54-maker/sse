@@ -28,5 +28,5 @@ test("manifest pins a commit that contains every loaded entry module", async () 
 
 test("fresh titles are attempted before held retry titles", async () => {
   const draft = await read("99_절대_건들지마세요_프로그램파일/scripts/adsense-create-drafts.mjs");
-  assert.match(draft, /const titleEntries = \[\.\.\.selection\.entries, \.\.\.retryEntries\];/);
+  assert.ok(draft.includes("const titleEntries = selection.entries.length > 0 ? selection.entries : retryEntries;"));
 });

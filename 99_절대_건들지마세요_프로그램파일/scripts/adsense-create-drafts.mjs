@@ -2699,7 +2699,8 @@ const requestedCount = limit > 0 ? limit : allTitleEntries.length;
 const selection = selectRandomUnusedTitleEntries(
   allTitleEntries, includeUsedTitles ? new Set() : usedTitleKeys, 0,
 );
-const titleEntries = [...selection.entries, ...retryEntries];
+// 일반 요청은 새 제목만 처리하고, 재검증 보관함은 새 제목이 모두 소진된 뒤에만 꺼낸다.
+const titleEntries = selection.entries.length > 0 ? selection.entries : retryEntries;
 const titles = titleEntries.map((entry) => entry.title);
 if (titles.length === 0) {
   if (allTitleEntries.length > 0 && usedTitleKeys.size > 0 && !includeUsedTitles) {
