@@ -2246,6 +2246,18 @@ function ensureHeadingBodies(html, title) {
   return (output + source.slice(cursor)).trim();
 }
 
+function removeEarlierCoreHeadings(html) {
+  const source = String(html || "");
+  const pattern = /<!--\s*wp:heading(?:\s+\{[^}]*\})?\s*-->\s*<h2\b[^>]*>\s*이 글에서 기억할 핵심 포인트\s*<\/h2>\s*<!--\s*\/wp:heading\s*-->/gi;
+  const blocks = [...source.matchAll(pattern)];
+  if (blocks.length <= 1) return source;
+  let seen = 0;
+  return source.replace(pattern, (block) => {
+    seen += 1;
+    return seen < blocks.length ? "" : block;
+  });
+}
+
 function keepFinalCoreSectionCompact(html) {
   const source = String(html || "");
   const headings = [...source.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)];
@@ -2307,6 +2319,7 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
   repaired = removeEmptyHeadingSections(repaired);
   repaired = ensureHeadingBodies(repaired, title);
   repaired = normalizeArticleHtml(repaired, title);
+  repaired = removeEarlierCoreHeadings(repaired);
   repaired = keepFinalCoreSectionCompact(repaired);
   const normalizedHeadings = [...repaired.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)];
   const normalizedFinal = normalizedHeadings.at(-1);
