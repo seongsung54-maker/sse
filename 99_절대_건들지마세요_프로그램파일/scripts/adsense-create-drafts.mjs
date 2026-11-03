@@ -2246,6 +2246,21 @@ function ensureHeadingBodies(html, title) {
   return (output + source.slice(cursor)).trim();
 }
 
+function keepFinalCoreSectionCompact(html) {
+  const source = String(html || "");
+  const headings = [...source.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)];
+  const finalHeading = headings.at(-1);
+  if (!finalHeading || stripTags(finalHeading[1]).replace(/\s+/g, " ").trim() !== "이 글에서 기억할 핵심 포인트") return source;
+  const headEnd = finalHeading.index + finalHeading[0].length;
+  const before = source.slice(0, finalHeading.index);
+  let tail = source.slice(headEnd);
+  const blocks = [...tail.matchAll(/<!--\s*wp:paragraph\s*-->\s*<p\b[^>]*>[\s\S]*?<\/p>\s*<!--\s*\/wp:paragraph\s*-->/gi)];
+  if (blocks.length <= 2) return source;
+  const extra = blocks.slice(2).map((block) => block[0]);
+  for (const block of extra) tail = tail.replace(block, "");
+  return (before.trim() + "\n\n" + extra.join("\n\n") + "\n\n" + source.slice(finalHeading.index, headEnd) + tail).trim();
+}
+
 function repairDraftCandidate(html, title, focusKeyword = "") {
   let repaired = convertOrderedListsToParagraphs(html)
     // 일부 생성기가 태그 이름을 Gutenberg 블록 이름으로 잘못 쓰는 경우를 표준 이름으로 고친다.
@@ -2292,6 +2307,7 @@ function repairDraftCandidate(html, title, focusKeyword = "") {
   repaired = removeEmptyHeadingSections(repaired);
   repaired = ensureHeadingBodies(repaired, title);
   repaired = normalizeArticleHtml(repaired, title);
+  repaired = keepFinalCoreSectionCompact(repaired);
   const normalizedHeadings = [...repaired.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)];
   const normalizedFinal = normalizedHeadings.at(-1);
   if (normalizedFinal && Number(normalizedFinal[1]) === 2 && stripTags(normalizedFinal[2]).trim() === "이 글에서 기억할 핵심 포인트") {
