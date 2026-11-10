@@ -1716,7 +1716,7 @@ function buildImagePrompt({title, meta}) {
     "Style: clean, trustworthy, calm educational mood, realistic lighting, simple uncluttered background, one strong focal point.",
     "Composition: landscape 3:2 featured image, main subject centered, clean margins on all sides, clearly readable as a small thumbnail.",
     "STRICT RULE - NO TEXT AT ALL: the image must contain absolutely no text of any kind in any language or script. No Korean, no English, no numbers, no letters, no words, no signs, no labels, no captions, no subtitles, no watermarks, no logos, no UI text, no writing on paper, screens, boards, packaging, clothing or walls. If the scene would naturally include a sign, screen, document, book or label, render it blank, blurred or turned away so that nothing readable appears anywhere.",
-    "Also do not include real person faces, copyrighted characters, fake official documents, brand marks, medical, legal or financial claims, before-and-after imagery, or clickbait elements.",
+    "Do not include people, human figures, portraits, faces, hands, or body parts. Depict the topic through objects, spaces, landscapes, tools, documents turned away, or other non-human visual elements only. Also exclude copyrighted characters, fake official documents, brand marks, medical, legal or financial claims, before-and-after imagery, and clickbait elements.",
   ].join("\n");
 }
 
